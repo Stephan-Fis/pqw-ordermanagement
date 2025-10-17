@@ -140,7 +140,7 @@ function pqw_page_complete_name() {
 		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\pqw-order-management\pages\complete-name.php */
 		var pqw_export_customers = <?php echo wp_json_encode( $customers ); ?>;
 	</script>
-	<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+	<script src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . '../assets/xlsx.full.min.js' ); ?>"></script>
 	<script type="text/javascript">
 		// wait until DOM ready so the export button exists
 		document.addEventListener('DOMContentLoaded', function () {

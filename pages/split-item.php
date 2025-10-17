@@ -178,13 +178,15 @@ function pqw_page_split_item() {
 				});
 			}
 
+			// Hilfsfunktion: SheetJS nur bei Bedarf laden
 			function loadSheetJS(cb){
 				if (window.XLSX) { cb(); return; }
 				var s = document.createElement('script');
-				s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-				s.onload = cb;
-				document.head.appendChild(s);
-			}
+				// load local copy from plugin assets folder
+				s.src = '<?php echo esc_url( plugin_dir_url( __FILE__ ) . "../assets/xlsx.full.min.js" ); ?>';
+ 				s.onload = cb;
+ 				document.head.appendChild(s);
+ 			}
 
 			function exportTableToXlsx(filename){
 				var table = document.querySelector('.pqw-orders-table table');

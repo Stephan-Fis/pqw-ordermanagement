@@ -178,7 +178,7 @@ function pqw_page_complete_item() {
 		var pqw_export_products = <?php echo wp_json_encode( $aggregated ); ?>;
 		var pqw_export_product_orders = <?php echo wp_json_encode( $product_customers ); ?>;
 	</script>
-	<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+	<script src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . '../assets/xlsx.full.min.js' ); ?>"></script>
 	<script type="text/javascript">
 		document.addEventListener('DOMContentLoaded', function () {
 			function formatPrice(num){

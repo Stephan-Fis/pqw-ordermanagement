@@ -59,10 +59,10 @@ class PQW_Order_Management {
 			return;
 		}
 
-		// Bootstrap 5 CDN (CSS only)
+		// Bootstrap 5 local CSS from plugin assets folder
 		wp_enqueue_style(
 			'pqw-bootstrap',
-			'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+			plugin_dir_url( __FILE__ ) . 'assets/bootstrap.min.css',
 			array(),
 			'5.3.2'
 		);

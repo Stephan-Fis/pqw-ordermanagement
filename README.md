@@ -9,23 +9,27 @@ Das PQW Order-Management Plugin erweitert WooCommerce um leistungsstarke Funktio
 ## Features
 
 ### Bestellungsaufteilung
+
 - **Nach Kunde**: Alle Bestellungen eines Kunden auf "wartend" setzen
 - **Nach Artikel**: Einzelne Artikel in separate Bestellungen aufteilen
 - Automatische Stornierung bei 0€-Bestellungen
 - Erhaltung der Bestellhistorie
 
-### Bestellungsabschluss  
+### Bestellungsabschluss
+
 - **Nach Kunde**: Alle Bestellungen eines Kunden abschließen
 - **Nach Artikel**: Einzelne Artikel-Bestellungen abschließen
 - Intelligente Behandlung leerer/0€-Bestellungen
 
 ### Queue-System
+
 - **Asynchrone Verarbeitung** für große Datenmengen
 - **Batch-Processing** (10 Einträge pro Durchlauf)
 - **Automatische Wiederholung** bei ausstehenden Einträgen
 - **WP-Cron Fallback** für zuverlässige Verarbeitung
 
 ### Benutzeroberfläche
+
 - **Bootstrap 5** Design
 - **Responsive Tabellen** für alle Bildschirmgrößen
 - **Bulk-Operationen** mit Checkbox-Auswahl
@@ -41,21 +45,25 @@ Das PQW Order-Management Plugin erweitert WooCommerce um leistungsstarke Funktio
 ## Technische Details
 
 ### Datenbank-Tabellen
+
 - `wp_pqw_order_queue` - Queue für Aufteilungsoperationen
 - `wp_pqw_order_complete_queue` - Queue für Abschlussoperationen
 
 ### AJAX-Endpunkte
+
 - `pqw_queue_status` - Status der Aufteilungs-Queue
 - `pqw_process_queue_async` - Trigger für asynchrone Verarbeitung
 - `pqw_complete_queue_status` - Status der Abschluss-Queue  
 - `pqw_process_complete_queue_async` - Trigger für Abschluss-Verarbeitung
 
 ### Cron-Jobs
+
 - `pqw_process_queue` - Verarbeitung der Aufteilungs-Queue
 - `pqw_process_complete_queue` - Verarbeitung der Abschluss-Queue
 - `pqw_cleanup_queue` - Tägliche Bereinigung alter Queue-Einträge (7+ Tage)
 
 ### WordPress Hooks
+
 - `admin_menu` - Registrierung der Admin-Menüs
 - `admin_enqueue_scripts` - Laden von Bootstrap CSS
 - `wp_ajax_*` - AJAX-Handler für asynchrone Verarbeitung
@@ -63,6 +71,7 @@ Das PQW Order-Management Plugin erweitert WooCommerce um leistungsstarke Funktio
 ## Verwendung
 
 ### Admin-Menü
+
 Navigate zu **PQW Orders** im WordPress Admin:
 
 1. **Bestellung aufteilen - Name**: Alle Bestellungen ausgewählter Kunden aufteilen
@@ -71,6 +80,7 @@ Navigate zu **PQW Orders** im WordPress Admin:
 4. **Bestellung abschließen - Artikel**: Artikel-Bestellungen abschließen
 
 ### Workflow
+
 1. Kunden über Checkboxes auswählen
 2. Aktion per Button ausführen
 3. Bei >1 Kunde: Queue-basierte Verarbeitung
@@ -80,12 +90,15 @@ Navigate zu **PQW Orders** im WordPress Admin:
 ## Konfiguration
 
 ### Batch-Größe
+
 Standard: 20 Einträge pro Durchlauf (anpassbar in `pqw_process_queue_handler()`)
 
-### Cleanup-Intervall  
+### Cleanup-Intervall
+
 Standard: Täglich, löscht Queue-Einträge älter als 7 Tage
 
 ### Berechtigugen
+
 - `manage_woocommerce` - Vollzugriff auf alle Funktionen
 - `manage_options` - Alternative Berechtigung für Administratoren
 
@@ -106,12 +119,14 @@ Standard: Täglich, löscht Queue-Einträge älter als 7 Tage
 ## Debugging
 
 Queue-Status prüfen:
+
 ```sql
 SELECT * FROM wp_pqw_order_queue WHERE status = 'pending';
 SELECT * FROM wp_pqw_order_complete_queue WHERE status = 'pending';
 ```
 
 Cron-Jobs prüfen:
+
 ```php
 wp_next_scheduled('pqw_process_queue');
 wp_next_scheduled('pqw_cleanup_queue');

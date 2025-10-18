@@ -141,7 +141,8 @@ Dieses Plugin wird unter der GPL v2+ Lizenz bereitgestellt.
 - **WordPress** 5.0+
 - **WooCommerce** 3.0+
 - **PHP** 7.4+
-- **Bootstrap** 5.3.2 (via CDN)
+- **Bootstrap** (gebundelt)
+- **xlsx-sheetjs** (gebundelt)
 
 ## Beitrag
 

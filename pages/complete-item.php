@@ -234,7 +234,8 @@ function pqw_page_complete_item() {
 					alert('Bitte mindestens einen Artikel auswählen zum Export.');
 					return;
 				}
-				var rows = [];
+				// persons map: personKey => { person_name, email, total, rows: [{product_name, qty, unitPrice, total}] }
+				var persons = {};
 				for (var i=0;i<checked.length;i++){
 					var pid = checked[i].value;
 					var map = pqw_export_product_orders[pid];
@@ -242,21 +243,50 @@ function pqw_page_complete_item() {
 					for (var custKey in map) {
 						if (!map.hasOwnProperty(custKey)) continue;
 						var entry = map[custKey];
-						rows.push({
-							'Artikel': entry.product_name || '',
-							'Person': entry.person_name || ( (entry.first_name||'') + ' ' + (entry.last_name||'') ).trim() || entry.email || 'Gast',
-							'Beschreibung': (entry.full_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
-							'Kurzbeschreibung': (entry.short_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
-							'Menge': parseInt(entry.quantity || 0, 10),
-							'Gesamtpreis_für_Person': formatPrice(parseFloat(entry.total || 0))
+						var qty = parseInt(entry.quantity || 0, 10) || 0;
+						var total = parseFloat(entry.total || 0) || 0;
+						var unitPrice = qty ? (total / qty) : total;
+						// ensure person record
+						if (!persons[custKey]) {
+							persons[custKey] = {
+								person_name: entry.person_name || ( (entry.first_name||'') + ' ' + (entry.last_name||'') ).trim() || entry.email || 'Gast',
+								email: entry.email || '',
+								total: 0,
+								rows: []
+							};
+						}
+						persons[custKey].rows.push({
+							product_name: entry.product_name || '',
+							qty: qty,
+							unitPrice: unitPrice,
+							total: total
+						});
+						persons[custKey].total += total;
+					}
+				}
+
+				// build output rows: Person, Artikel, Menge, Preis, Gesamtpreis
+				var out = [];
+				for (var pk in persons) {
+					if (!persons.hasOwnProperty(pk)) continue;
+					var p = persons[pk];
+					for (var r = 0; r < p.rows.length; r++) {
+						var row = p.rows[r];
+						out.push({
+							'Person': (r === 0) ? p.person_name : '',
+							'Artikel': row.product_name,
+							'Menge': row.qty,
+							'Preis': formatPrice(row.unitPrice),
+							'Gesamtpreis': (r === 0) ? formatPrice(p.total) : ''
 						});
 					}
 				}
-				if (rows.length === 0) {
+
+				if (out.length === 0) {
 					alert('Keine Daten zum Export gefunden.');
 					return;
 				}
-				var ws = XLSX.utils.json_to_sheet(rows, {header:['Artikel','Person','Beschreibung','Kurzbeschreibung','Menge','Gesamtpreis_für_Person']});
+				var ws = XLSX.utils.json_to_sheet(out, {header:['Person','Artikel','Menge','Preis','Gesamtpreis']});
 				var wb = XLSX.utils.book_new();
 				XLSX.utils.book_append_sheet(wb, ws, 'ProductOrders');
 				var fname = 'orders_export_article_name_' + localDateStamp(new Date()) + '.xlsx';

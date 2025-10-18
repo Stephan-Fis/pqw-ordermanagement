@@ -128,6 +128,20 @@ function pqw_page_complete_name() {
 		}
 	}
 
+	// Neuer Abschnitt: berechne Gesamtpreis pro Kunde und ergänze das Array
+	if ( ! empty( $customers ) ) {
+		foreach ( $customers as $k => &$c ) {
+			$total = 0.0;
+			if ( ! empty( $c['rows'] ) ) {
+				foreach ( $c['rows'] as $r ) {
+					$total += floatval( $r['line_total'] );
+				}
+			}
+			$c['total'] = $total;
+		}
+		unset( $c );
+	}
+
 	if ( empty( $customers ) ) {
 		echo '<p>Keine "wartend" Bestellungen gefunden.</p>';
 		echo '</div>';
@@ -173,15 +187,22 @@ function pqw_page_complete_name() {
 					if (!c) continue;
 					var display = ((c.first_name||'') + ' ' + (c.last_name||'')).trim();
 					if (!display) display = c.email || 'Gast';
+					// berechne Gesamt (falls noch nicht vorhanden im Objekt)
+					var custTotal = parseFloat(c.total || 0);
 					if (c.rows && c.rows.length) {
 						for (var j=0;j<c.rows.length;j++){
 							var r = c.rows[j];
+							var qty = parseInt(r.quantity || 0, 10) || 0;
+							var lineTotal = parseFloat(r.line_total || 0);
+							// Stückpreis berechnen (falls Menge > 0)
+							var unitPrice = qty ? (lineTotal / qty) : lineTotal;
+							// erste Zeile: Person + Gesamtpreis, sonst leere Felder
 							out.push({
-								'Person': display,
-								'Email': c.email || '',
+								'Person': (j === 0) ? display : '',
 								'Artikel': r.product_name || '',
-								'Menge': parseInt(r.quantity || 0, 10),
-								'Summe': formatPrice(parseFloat(r.line_total || 0))
+								'Menge': qty,
+								'Preis': formatPrice(unitPrice),
+								'Gesamtpreis': (j === 0) ? formatPrice(custTotal) : ''
 							});
 						}
 					}
@@ -191,7 +212,7 @@ function pqw_page_complete_name() {
 					return;
 				}
 				// build workbook and trigger download
-				var ws = XLSX.utils.json_to_sheet(out, {header:['Person','Email','Artikel','Menge','Summe']});
+				var ws = XLSX.utils.json_to_sheet(out, {header:['Person','Artikel','Menge','Preis','Gesamtpreis']});
 				var wb = XLSX.utils.book_new();
 				XLSX.utils.book_append_sheet(wb, ws, 'Orders');
 				var fname = 'pqw_orders_export_' + localDateStamp(new Date()) + '.xlsx';
@@ -216,7 +237,7 @@ function pqw_page_complete_name() {
 	echo '<span class="description">Markierte Personen: alle Bestellungen/Artikel dieser Person werden abgeschlossen.</span>';
 	echo '</p>';
 
-	// Render table with columns: Name | Artikel | Menge | Summe
+	// Render table with columns: Name | Artikel | Menge | Preis | Gesamtpreis
 	echo '<div class="pqw-orders-table"><div class="table-responsive">';
 	echo '<table class="table table-striped table-bordered">';
 	echo '<thead class="table-dark"><tr>';
@@ -224,7 +245,8 @@ function pqw_page_complete_name() {
 	echo '<th scope="col">Name</th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Menge</th>';
-	echo '<th scope="col">Summe</th>';
+	echo '<th scope="col">Preis</th>';
+	echo '<th scope="col">Gesamtpreis</th>';
 	echo '</tr></thead>';
 	echo '<tbody>';
 
@@ -237,6 +259,12 @@ function pqw_page_complete_name() {
 		if ( empty( $rows ) ) {
 			continue;
 		}
+		// berechne Gesamtpreis für diese Person
+		$cust_total = 0.0;
+		foreach ( $rows as $r ) {
+			$cust_total += floatval( $r['line_total'] );
+		}
+
 		$first_row = true;
 		foreach ( $rows as $row ) {
 			echo '<tr>';
@@ -247,9 +275,18 @@ function pqw_page_complete_name() {
 			}
 			echo '<td>' . esc_html( $row['product_name'] ) . '</td>';
 			echo '<td>' . intval( $row['quantity'] ) . '</td>';
-			echo '<td>' . wc_price( $row['line_total'] ) . '</td>';
+			// Stückpreis berechnen (linie_total / menge)
+			$unit_price = ( intval( $row['quantity'] ) > 0 ) ? ( floatval( $row['line_total'] ) / intval( $row['quantity'] ) ) : floatval( $row['line_total'] );
+			echo '<td>' . wc_price( $unit_price ) . '</td>';
+			// Gesamtpreis nur in oberster Zeile mit rowspan
+			if ( ! isset( $printed_total_for_customer ) || $printed_total_for_customer !== $cust_key ) {
+				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '">' . wc_price( $cust_total ) . '</td>';
+				$printed_total_for_customer = $cust_key;
+			}
 			echo '</tr>';
 		}
+		// clear marker for next customer
+		unset( $printed_total_for_customer );
 	}
 
 	echo '</tbody></table></div></div>';

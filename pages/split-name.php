@@ -198,56 +198,7 @@ function pqw_page_split_name() {
 				}
 			}
 
-			function aggregateCustomerTotals(){
-				var table = document.querySelector('.pqw-orders-table table');
-				if (!table) return;
 
-				// Alle Kunden-Checkboxen (Gruppen-Header) ermitteln
-				var cboxes = table.querySelectorAll('input.pqw-customer-checkbox');
-				for (var i=0;i<cboxes.length;i++){
-					var cb = cboxes[i];
-					var headerTr = cb.closest('tr');
-					if (!headerTr) continue;
-
-					// entferne vorher gesetzte Anzeige, damit mehrfaches Aufrufen idempotent bleibt
-					var prevSpan = headerTr.querySelector('.pqw-total-span');
-					if (prevSpan) { prevSpan.parentNode.removeChild(prevSpan); }
-
-					// Summiere folgende Zeilen bis zum nächsten Header (nächste Checkbox-Zeile) oder Tabellenende
-					var sum = 0;
-					var row = headerTr.nextElementSibling;
-					while (row) {
-						// Stopp, wenn diese row eine weitere Kunden-Checkbox enthält (neuer Header)
-						if (row.querySelector && row.querySelector('input.pqw-customer-checkbox')) break;
-
-						// Suche in Zellen nach Preisen (Suche Euro-Symbol oder Dezimalzahl)
-						var cells = row.querySelectorAll('td,th');
-						for (var c=0;c<cells.length;c++){
-							var cell = cells[c];
-							var txt = cell.textContent || '';
-							var val = parseCurrency(txt);
-							if (val !== null) {
-								sum += val;
-								// Einzelpreis ausblenden
-								cell.textContent = '';
-							}
-						}
-						row = row.nextElementSibling;
-					}
-
-					// Anzeige des Gesamtpreises neben der Checkbox (im selben TD)
-					var cbTd = cb.closest('td') || headerTr.querySelector('td');
-					if (cbTd) {
-						var span = document.createElement('span');
-						span.className = 'pqw-total-span';
-						span.style.marginLeft = '10px';
-						span.style.fontWeight = '600';
-						span.style.color = '#333';
-						span.textContent = 'Gesamt: ' + formatEuro(sum);
-						cbTd.appendChild(span);
-					}
-				}
-			}
 
 			// Warte kurz, bis DOM komplett aufgebaut (falls Tabelle durch PHP/JS nachgeladen wird)
 			if (document.readyState === 'loading') {

@@ -182,7 +182,12 @@ function pqw_page_complete_item() {
 	<script type="text/javascript">
 		document.addEventListener('DOMContentLoaded', function () {
 			function formatPrice(num){
-				return (Math.round((num||0)*100)/100).toFixed(2);
+				try {
+					// Fixed two decimals and use comma as decimal separator
+					return (Math.round((num||0)*100)/100).toFixed(2).replace('.', ',');
+				} catch(e) {
+					return '0,00';
+				}
 			}
 
 			// local timestamp helper for filenames

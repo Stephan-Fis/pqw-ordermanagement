@@ -142,6 +142,40 @@ function pqw_page_complete_name() {
 		unset( $c );
 	}
 
+	// Sortiere Kunden alphabetisch nach Name (Vorname Nachname). Fallback auf E-Mail oder "Gast".
+	if ( ! empty( $customers ) ) {
+		uasort( $customers, function( $a, $b ) {
+			$la = trim( isset( $a['last_name'] ) ? $a['last_name'] : '' );
+			$lb = trim( isset( $b['last_name'] ) ? $b['last_name'] : '' );
+			// compare last names first
+			if ( $la !== '' || $lb !== '' ) {
+				$cmp = strcasecmp( $la, $lb );
+				if ( $cmp !== 0 ) {
+					return $cmp;
+				}
+			}
+			// then compare first names
+			$fa = trim( isset( $a['first_name'] ) ? $a['first_name'] : '' );
+			$fb = trim( isset( $b['first_name'] ) ? $b['first_name' ] : '' );
+			if ( $fa !== '' || $fb !== '' ) {
+				$cmp2 = strcasecmp( $fa, $fb );
+				if ( $cmp2 !== 0 ) {
+					return $cmp2;
+				}
+			}
+			// final fallback: full display name / email / Gast
+			$da = trim( ( isset( $a['first_name'] ) ? $a['first_name'] : '' ) . ' ' . ( isset( $a['last_name'] ) ? $a['last_name'] : '' ) );
+			$db = trim( ( isset( $b['first_name'] ) ? $b['first_name'] : '' ) . ' ' . ( isset( $b['last_name'] ) ? $b['last_name'] : '' ) );
+			if ( $da === '' ) {
+				$da = ! empty( $a['email'] ) ? $a['email'] : __( 'Gast', 'pqw-order-management' );
+			}
+			if ( $db === '' ) {
+				$db = ! empty( $b['email'] ) ? $b['email'] : __( 'Gast', 'pqw-order-management' );
+			}
+			return strcasecmp( $da, $db );
+		} );
+	}
+
 	if ( empty( $customers ) ) {
 		echo '<p>Keine "wartend" Bestellungen gefunden.</p>';
 		echo '</div>';
@@ -190,8 +224,15 @@ function pqw_page_complete_name() {
 					var key = checked[i].value;
 					var c = pqw_export_customers[key];
 					if (!c) continue;
-					var display = ((c.first_name||'') + ' ' + (c.last_name||'')).trim();
-					if (!display) display = c.email || 'Gast';
+					// Anzeige "Nachname, Vorname" (Fallback: Vorname, E-Mail, 'Gast')
+					var ln = (c.last_name||'').trim();
+					var fn = (c.first_name||'').trim();
+					var display = '';
+					if (ln) {
+						display = fn ? ln + ', ' + fn : ln;
+					} else {
+						display = fn || c.email || 'Gast';
+					}
 					// berechne Gesamt (falls noch nicht vorhanden im Objekt)
 					var custTotal = parseFloat(c.total || 0);
 					if (c.rows && c.rows.length) {
@@ -256,9 +297,13 @@ function pqw_page_complete_name() {
 	echo '<tbody>';
 
 	foreach ( $customers as $cust_key => $cust_data ) {
-		$display_name = trim( $cust_data['first_name'] . ' ' . $cust_data['last_name'] );
-		if ( empty( $display_name ) ) {
-			$display_name = $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'pqw-order-management' );
+		// Anzeige: "Nachname, Vorname" (Fallback: E-Mail, dann "Gast")
+		$ln = trim( (string) $cust_data['last_name'] );
+		$fn = trim( (string) $cust_data['first_name'] );
+		if ( $ln !== '' ) {
+			$display_name = $fn !== '' ? $ln . ', ' . $fn : $ln;
+		} else {
+			$display_name = $fn !== '' ? $fn : ( $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'pqw-order-management' ) );
 		}
 		$rows = $cust_data['rows'];
 		if ( empty( $rows ) ) {

@@ -114,6 +114,13 @@ function pqw_page_complete_item() {
 		}
 	}
 
+	// Sortiere aggregierte Produktliste alphabetisch nach Produktname (A-Z, case-insensitive)
+	if ( ! empty( $aggregated ) ) {
+		uasort( $aggregated, function( $a, $b ) {
+			return strcasecmp( $a['product_name'], $b['product_name'] );
+		} );
+	}
+
 	if ( empty( $aggregated ) ) {
 		echo '<p>Keine "wartend" Bestellungen / Artikel gefunden.</p>';
 		echo '</div>';
@@ -232,14 +239,14 @@ function pqw_page_complete_item() {
 				XLSX.writeFile(wb, fname);
 			}
 
-			// NEW: export per product per person (Artikel, Person, Beschreibung, Kurzbeschreibung, Menge, Gesamtpreis für die Person)
+			// export per product per person (Person, Artikel, Menge, Preis, Gesamtpreis)
 			function exportProductsWithPersons(){
 				var checked = document.querySelectorAll('input[name="products[]"]:checked');
 				if (!checked || checked.length === 0) {
 					alert('Bitte mindestens einen Artikel auswählen zum Export.');
 					return;
 				}
-				// persons map: personKey => { person_name, email, total, rows: [{product_name, qty, unitPrice, total}] }
+				// persons map: personKey => { person_name, email, total, rows: [{product_name, qty, unitPrice, total}], firstName, lastName }
 				var persons = {};
 				for (var i=0;i<checked.length;i++){
 					var pid = checked[i].value;
@@ -251,13 +258,32 @@ function pqw_page_complete_item() {
 						var qty = parseInt(entry.quantity || 0, 10) || 0;
 						var total = parseFloat(entry.total || 0) || 0;
 						var unitPrice = qty ? (total / qty) : total;
-						// ensure person record
+						// ensure person record (store first/last for sorting)
 						if (!persons[custKey]) {
+							// build person display name as "Nachname, Vorname" with fallbacks
+							var _ln = (entry.last_name || '').trim();
+							var _fn = (entry.first_name || '').trim();
+							var _pn = '';
+							if (_ln && _fn) {
+								_pn = _ln + ', ' + _fn;
+							} else if (_ln) {
+								_pn = _ln;
+							} else if (_fn) {
+								_pn = _fn;
+							} else if (entry.person_name && entry.person_name.trim()) {
+								_pn = entry.person_name.trim();
+							} else if (entry.email) {
+								_pn = entry.email;
+							} else {
+								_pn = 'Gast';
+							}
 							persons[custKey] = {
-								person_name: entry.person_name || ( (entry.first_name||'') + ' ' + (entry.last_name||'') ).trim() || entry.email || 'Gast',
+								person_name: _pn,
 								email: entry.email || '',
 								total: 0,
-								rows: []
+								rows: [],
+								firstName: entry.first_name || '',
+								lastName: entry.last_name || ''
 							};
 						}
 						persons[custKey].rows.push({
@@ -272,9 +298,37 @@ function pqw_page_complete_item() {
 
 				// build output rows: Person, Artikel, Menge, Preis, Gesamtpreis
 				var out = [];
+				// create sortable list of persons
+				var personList = [];
 				for (var pk in persons) {
 					if (!persons.hasOwnProperty(pk)) continue;
-					var p = persons[pk];
+					personList.push({ key: pk, data: persons[pk] });
+				}
+				// sort by last name then first name (case-insensitive, locale-aware), fallback to person_name/email/'Gast'
+				personList.sort(function(a,b){
+					var la = (a.data.lastName || '').trim();
+					var lb = (b.data.lastName || '').trim();
+					// compare last names first
+					if (la || lb) {
+						var cmp = la.localeCompare(lb, undefined, { sensitivity: 'base' });
+						if (cmp !== 0) return cmp;
+					}
+					// last names equal or missing -> compare first names
+					var fa = (a.data.firstName || '').trim();
+					var fb = (b.data.firstName || '').trim();
+					if (fa || fb) {
+						var cmp2 = fa.localeCompare(fb, undefined, { sensitivity: 'base' });
+						if (cmp2 !== 0) return cmp2;
+					}
+					// fallback to person_name or email
+					var da = (a.data.person_name && a.data.person_name.trim()) || a.data.email || 'Gast';
+					var db = (b.data.person_name && b.data.person_name.trim()) || b.data.email || 'Gast';
+					return da.localeCompare(db, undefined, { sensitivity: 'base' });
+				});
+
+				// iterate sorted persons and build rows
+				for (var i = 0; i < personList.length; i++) {
+					var p = personList[i].data;
 					for (var r = 0; r < p.rows.length; r++) {
 						var row = p.rows[r];
 						out.push({
@@ -298,11 +352,34 @@ function pqw_page_complete_item() {
 				XLSX.writeFile(wb, fname);
 			}
 
-			var btn = document.getElementById('pqw_export_products_btn');
-			if (btn) btn.addEventListener('click', exportProducts);
+			// robust init: wait for buttons to exist and ensure SheetJS is loaded before calling exports
+			function loadSheetJS(cb){
+				if (window.XLSX) { cb(); return; }
+				var s = document.createElement('script');
+				s.src = '<?php echo esc_url( plugin_dir_url( __FILE__ ) . "../assets/xlsx.full.min.js" ); ?>';
+				s.onload = cb;
+				document.head.appendChild(s);
+			}
 
-			var btn2 = document.getElementById('pqw_export_products_with_person_btn');
-			if (btn2) btn2.addEventListener('click', exportProductsWithPersons);
+			function waitFor(selector, cb){
+				var el = document.querySelector(selector);
+				if (el) { cb(el); return; }
+				var t = setInterval(function(){
+					el = document.querySelector(selector);
+					if (el) { clearInterval(t); cb(el); }
+				}, 150);
+			}
+
+			waitFor('#pqw_export_products_btn', function(el){
+				el.addEventListener('click', function(){
+					loadSheetJS(function(){ exportProducts(); });
+				});
+			});
+			waitFor('#pqw_export_products_with_person_btn', function(el){
+				el.addEventListener('click', function(){
+					loadSheetJS(function(){ exportProductsWithPersons(); });
+				});
+			});
 		});
 	</script>
 	<?php

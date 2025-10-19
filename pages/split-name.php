@@ -175,6 +175,53 @@ function pqw_page_split_name() {
 					});
 				});
 			}
+
+			// Anpassung: formatiere Namensspalte in der Tabelle als "Nachname, Vorname"
+			function formatNameColumnToLastCommaFirst(){
+				var rows = document.querySelectorAll('.pqw-orders-table table tbody tr');
+				if (!rows || rows.length === 0) return;
+				rows.forEach(function(tr){
+					var tds = tr.querySelectorAll('td');
+					if (!tds || tds.length === 0) return;
+
+					// Versuche zuerst das data-label-Attribut "Name"
+					var nameCell = tr.querySelector('td[data-label="Name"]') || tr.querySelector('td[data-label="name"]');
+					// Falls nicht vorhanden: wenn erste Zelle Checkbox enthält, ist Name vermutlich zweite Zelle
+					if (!nameCell) {
+						if (tds[0].querySelector('input[type="checkbox"], input[type="radio"]')) {
+							nameCell = tds[1] || tds[0];
+						} else {
+							// sonst nehme die erste textliche Zelle, die kein Input enthält
+							for (var i=0;i<tds.length;i++){
+								if (!tds[i].querySelector('input,select,textarea')) { nameCell = tds[i]; break; }
+							}
+						}
+					}
+					if (!nameCell) return;
+
+					var txt = (nameCell.textContent || '').trim();
+					if (!txt) return;
+					// wenn bereits "Nachname, Vorname" (Komma) -> überspringen
+					if (txt.indexOf(',') !== -1) return;
+
+					// Zerlege in Teile, letztes Wort als Nachname, Rest als Vorname(s)
+					var parts = txt.split(/\s+/);
+					if (parts.length < 2) return;
+					var last = parts.pop();
+					var first = parts.join(' ');
+					var newTxt = last + ', ' + first;
+					nameCell.textContent = newTxt;
+				});
+			}
+
+			// Formatierung sofort anwenden und auch kurz bevor Exportiert wird (Export klont die DOM-Tabelle)
+			document.addEventListener('DOMContentLoaded', function(){ setTimeout(formatNameColumnToLastCommaFirst, 30); });
+			// Falls Export per Button aufgerufen wird, stelle sicher, dass vor dem Klonen formatiert ist
+			var origExportTableToXlsx = exportTableToXlsx;
+			exportTableToXlsx = function(filename){
+				formatNameColumnToLastCommaFirst();
+				origExportTableToXlsx(filename);
+			};
 		})();
 	</script>
 

@@ -3,7 +3,7 @@
  * Plugin Name: PQW Order-Management
  * Plugin URI:  https://fischer-it.eu/pqw-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.6.3-251017_12
+ * Version:     1.7.0-251019_20
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: pqw-order-management
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class PQW_Order_Management {
 
-	const VERSION = '1.0.0';
+	const VERSION = '1.7.0-251019_20';
 	const PLUGIN_SLUG = 'pqw-order-management';
 
 	// Store main menu hook suffix
@@ -123,8 +123,8 @@ class PQW_Order_Management {
 		// Subpages: now callbacks are functions defined in pages/*.php
 		add_submenu_page(
 			self::PLUGIN_SLUG,
-			'Bestellung aufteilen - Name',
-			'Bestellung aufteilen - Name',
+			'Bestellung weiterverarbeiten - Name',
+			'Bestellung weiterverarbeiten - Name',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_split_name',
 			'pqw_page_split_name'
@@ -132,8 +132,8 @@ class PQW_Order_Management {
 
 		add_submenu_page(
 			self::PLUGIN_SLUG,
-			'Bestellung aufteilen - Artikel',
-			'Bestellung aufteilen - Artikel',
+			'Bestellung weiterverarbeiten - Artikel',
+			'Bestellung weiterverarbeiten - Artikel',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_split_item',
 			'pqw_page_split_item'
@@ -166,24 +166,25 @@ class PQW_Order_Management {
 		echo '<h1>PQW Order-Management</h1>';
 		echo '<p>Wählen Sie eine Aktion aus dem Menü links:</p>';
 		echo '<ul>';
-		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_split_name' ) ) . '">Bestellung aufteilen - Name</a></li>';
-		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_split_item' ) ) . '">Bestellung aufteilen - Artikel</a></li>';
+		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_split_name' ) ) . '">Bestellung weiterverarbeiten - Name</a></li>';
+		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_split_item' ) ) . '">Bestellung weiterverarbeiten - Artikel</a></li>';
 		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_complete_name' ) ) . '">Bestellung abschließen - Name</a></li>';
 		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_complete_item' ) ) . '">Bestellung abschließen - Artikel</a></li>';
 		echo '</ul>';
+		echo '<h6>Version ' . esc_html( self::VERSION ) . '</h6>';
 		echo '</div>';
 	}
 
 	/**
 	 * Generic subpage renderer.
 	 * Modes:
-	 *  - split_name, split_item  => button "Bestellungen aufteilen", set status to 'on-hold'
+	 *  - split_name, split_item  => button "Bestellungen weiterverarbeiten", set status to 'on-hold'
 	 *  - complete_name, complete_item => button "Bestellung abschließen", set status to 'completed'
 	 */
 	protected function render_subpage( $mode ) {
 		// determine labels and desired status
 		$is_split = strpos( $mode, 'split' ) === 0;
-		$button_label = $is_split ? __( 'Bestellungen aufteilen', 'pqw-order-management' ) : __( 'Bestellung abschließen', 'pqw-order-management' );
+		$button_label = $is_split ? __( 'Bestellungen weiterverarbeiten', 'pqw-order-management' ) : __( 'Bestellung abschließen', 'pqw-order-management' );
 		$target_status = $is_split ? 'on-hold' : 'completed';
 		$nonce_action = 'pqw_action_' . $mode;
 
@@ -836,7 +837,7 @@ class PQW_Order_Management {
 			// If new order total is 0 => cancel it automatically, otherwise set to on-hold
 			$new_total = floatval( $new_order->get_total() );
 			if ( 0.0 >= $new_total ) {
-				$new_order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Aufteilung', 'pqw-order-management' ) );
+				$new_order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'pqw-order-management' ) );
 			} else {
 				$new_order->update_status( 'on-hold', __( 'Aufgesplittet via PQW Order-Management', 'pqw-order-management' ) );
 			}
@@ -853,12 +854,12 @@ class PQW_Order_Management {
 		if ( empty( $remaining_items ) ) {
 			// statt löschen: auf "cancelled" setzen, damit Audit/History erhalten bleibt
 			if ( 'cancelled' !== $order->get_status() ) {
-				$order->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Aufteilung', 'pqw-order-management' ) );
+				$order->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Weiterverarbeitung', 'pqw-order-management' ) );
 			}
 		} else {
 			$orig_total = floatval( $order->get_total() );
 			if ( 0.0 >= $orig_total ) {
-				$order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Aufteilung', 'pqw-order-management' ) );
+				$order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'pqw-order-management' ) );
 			} else {
 				$order->add_order_note( __( 'Positionen ausgegliedert via PQW Order-Management', 'pqw-order-management' ) );
 				$order->save();

@@ -4,14 +4,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Bestellungen aufteilen - Name
+ * Bestellungen weiterverarbeiten - Name
  */
 function pqw_page_split_name() {
 	global $pqw_order_management;
 	// reuse logic from previous render_subpage for mode 'split_name'
 	$mode = 'split_name';
 	$is_split = true;
-	$button_label = __( 'Bestellungen aufteilen', 'pqw-order-management' );
+	$button_label = __( 'Bestellungen weiterverarbeiten', 'pqw-order-management' );
 	$target_status = 'on-hold';
 	$nonce_action = 'pqw_action_' . $mode;
 
@@ -93,12 +93,12 @@ function pqw_page_split_name() {
 	echo '<input type="hidden" name="pqw_subpage" value="' . esc_attr( $mode ) . '" />';
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
-	echo '<span class="description">Markierte Personen: alle Bestell//ungen/Artikel dieser Person werden getrennt/auf "wartend" gesetzt.</span>';
+	echo '<span class="description">Markierte Personen: alle Bestellungen/Artikel dieser Person werden getrennt/auf "wartend" gesetzt.</span>';
 	echo '</p>';
 	$pqw_order_management->render_orders_table( $customers );
 	echo '</form>';
 
-	// select all JS reused -> erweitert um Export-Funktion + Aggregation der Preise pro Person
+	// select all JS reused -> erweitert um Export-Funktion
 	?>
 	<script type="text/javascript">
 		(function(){
@@ -175,40 +175,119 @@ function pqw_page_split_name() {
 					});
 				});
 			}
+		})();
+	</script>
 
-			// --- NEU: Aggregiere und zeige Gesamtpreis pro Person, blende Einzelpreise aus ---
-			function parseCurrency(text) {
-				if (!text) return null;
-				// Suche bevorzugt nach Zahlen mit Dezimalstellen und optionalem Euro-Symbol
-				var m = text.match(/([0-9]+(?:[.,][0-9]{2}))\s*€/);
-				if (!m) {
-					m = text.match(/([0-9]+(?:[.,][0-9]{2}))/);
-				}
-				if (!m) return null;
-				var num = m[1].replace(',', '.');
-				var v = parseFloat(num);
-				return isNaN(v) ? null : v;
+	<!-- NEW: starte Queue-Verarbeitung beim Laden der Seite, falls noch Einträge vorhanden -->
+	<script type="text/javascript">
+		(function(){
+			function pqwCreateQueueOverlay(initial){
+				if (document.getElementById('pqw_queue_overlay')) return;
+				var style = document.createElement('style');
+				style.type = 'text/css';
+				style.appendChild(document.createTextNode(
+					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+					'#pqw_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+					'#pqw_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+					'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				));
+				document.head.appendChild(style);
+
+				var overlay = document.createElement('div');
+				overlay.id = 'pqw_queue_overlay';
+
+				var box = document.createElement('div');
+				box.id = 'pqw_queue_box';
+
+				var spinner = document.createElement('div');
+				spinner.className = 'pqw-spinner';
+
+				var msg = document.createElement('div');
+				msg.id = 'pqw_queue_msg';
+				msg.style.textAlign = 'center';
+				msg.style.fontSize = '14px';
+				msg.style.color = '#222';
+				msg.textContent = 'Verarbeite ' + (initial||0) + ' Einträge...';
+
+				box.appendChild(spinner);
+				box.appendChild(msg);
+				overlay.appendChild(box);
+				document.body.appendChild(overlay);
 			}
 
-			function formatEuro(num){
+			function pqwRemoveQueryParam(param){
 				try {
-					return num.toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
-				} catch(e) {
-					return (Math.round(num*100)/100).toFixed(2).replace('.',',') + ' €';
-				}
+					var u = new URL(window.location.href);
+					u.searchParams.delete(param);
+					history.replaceState && history.replaceState(null, '', u.toString());
+				} catch (e) { /* ignore */ }
 			}
 
-
-
-			// Warte kurz, bis DOM komplett aufgebaut (falls Tabelle durch PHP/JS nachgeladen wird)
-			if (document.readyState === 'loading') {
-				document.addEventListener('DOMContentLoaded', function(){ setTimeout(aggregateCustomerTotals, 50); });
-			} else {
-				setTimeout(aggregateCustomerTotals, 50);
+			function pqwCheckQueueStatus(cb){
+				var xhr = new XMLHttpRequest();
+				xhr.open('POST', ajaxurl);
+				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+				xhr.onload = function(){
+					try {
+						var res = JSON.parse(xhr.responseText);
+						cb && cb(res);
+					} catch(e){
+						cb && cb(null);
+					}
+				};
+				xhr.send('action=pqw_queue_status');
 			}
-			// optional: erneut aufrufen, falls dynamische Änderungen erwartet werden
-			// window.addEventListener('pqw_content_changed', aggregateCustomerTotals);
 
+			function pqwTriggerQueueProcessing(){
+				var xhr = new XMLHttpRequest();
+				xhr.open('POST', ajaxurl);
+				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+				xhr.send('action=pqw_process_queue_async');
+			}
+
+			function pqwStartQueuePolling(){
+				(function poll(){
+					pqwCheckQueueStatus(function(res){
+						try {
+							if (res && res.success && res.data) {
+								var pending = parseInt(res.data.pending,10) || 0;
+								var msgEl = document.getElementById('pqw_queue_msg');
+								if (msgEl) msgEl.textContent = 'Verbleibend: ' + pending;
+								if (pending > 0) {
+									setTimeout(poll, 1500);
+								} else {
+									if (msgEl) msgEl.textContent = 'Abarbeitung abgeschlossen.';
+									setTimeout(function(){ window.location.reload(); }, 1000);
+								}
+							} else {
+								// auf Fehler warten und erneut versuchen
+								setTimeout(poll, 2500);
+							}
+						} catch(e){
+							setTimeout(poll, 2500);
+						}
+					});
+				})();
+			}
+
+			// Beim Laden prüfen, ob Queue Einträge hat -> Overlay + Trigger + Polling starten
+			document.addEventListener('DOMContentLoaded', function(){
+				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?pqw_queued)
+				if (document.getElementById('pqw_queue_overlay')) return;
+				pqwCheckQueueStatus(function(res){
+					if (res && res.success && res.data) {
+						var pending = parseInt(res.data.pending,10) || 0;
+						if (pending > 0) {
+							pqwCreateQueueOverlay(pending);
+							pqwRemoveQueryParam('pqw_queued');
+							// einmalig Verarbeitung auslösen
+							pqwTriggerQueueProcessing();
+							// kleine Verzögerung, damit Server starten kann
+							setTimeout(pqwStartQueuePolling, 700);
+						}
+					}
+				});
+			});
 		})();
 	</script>
 	<?php

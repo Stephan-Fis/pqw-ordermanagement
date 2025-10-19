@@ -448,5 +448,115 @@ function pqw_page_complete_item() {
 	<?php
 	endif;
 
+	// NEW: ensure processing starts also when there are pending complete-queue entries (page load)
+	?>
+	<script type="text/javascript">
+		(function(){
+			function pqwCreateCompleteOverlay(initial){
+				if (document.getElementById('pqw_complete_overlay')) return;
+				var style = document.createElement('style');
+				style.type = 'text/css';
+				style.appendChild(document.createTextNode(
+					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+					'#pqw_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+					'#pqw_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+					'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				));
+				document.head.appendChild(style);
+
+				var overlay = document.createElement('div');
+				overlay.id = 'pqw_complete_overlay';
+
+				var box = document.createElement('div');
+				box.id = 'pqw_complete_box';
+
+				var spinner = document.createElement('div');
+				spinner.className = 'pqw-spinner';
+
+				var msg = document.createElement('div');
+				msg.id = 'pqw_complete_msg';
+				msg.style.textAlign = 'center';
+				msg.style.fontSize = '14px';
+				msg.style.color = '#222';
+				msg.textContent = 'Verarbeite ' + (initial||0) + ' Einträge...';
+
+				box.appendChild(spinner);
+				box.appendChild(msg);
+				overlay.appendChild(box);
+				document.body.appendChild(overlay);
+			}
+
+			function pqwRemoveQueryParam(param){
+				try {
+					var u = new URL(window.location.href);
+					u.searchParams.delete(param);
+					history.replaceState && history.replaceState(null, '', u.toString());
+				} catch (e) { /* ignore */ }
+			}
+
+			function pqwCheckCompleteStatus(cb){
+				var xhr = new XMLHttpRequest();
+				xhr.open('POST', ajaxurl);
+				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+				xhr.onload = function(){
+					try {
+						var res = JSON.parse(xhr.responseText);
+						cb && cb(res);
+					} catch(e){
+						cb && cb(null);
+					}
+				};
+				xhr.send('action=pqw_complete_queue_status');
+			}
+
+			function pqwTriggerCompleteProcessing(){
+				var xhr = new XMLHttpRequest();
+				xhr.open('POST', ajaxurl);
+				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+				xhr.send('action=pqw_process_complete_queue_async');
+			}
+
+			function pqwStartCompletePolling(){
+				(function poll(){
+					pqwCheckCompleteStatus(function(res){
+						try {
+							if (res && res.success && res.data) {
+								var pending = parseInt(res.data.pending,10) || 0;
+								var msgEl = document.getElementById('pqw_complete_msg');
+								if (msgEl) msgEl.textContent = 'Verbleibend: ' + pending;
+								if (pending > 0) {
+									setTimeout(poll, 1500);
+								} else {
+									if (msgEl) msgEl.textContent = 'Abarbeitung abgeschlossen.';
+									setTimeout(function(){ window.location.reload(); }, 1000);
+								}
+							} else {
+								setTimeout(poll, 2500);
+							}
+						} catch(e){
+							setTimeout(poll, 2500);
+						}
+					});
+				})();
+			}
+
+			document.addEventListener('DOMContentLoaded', function(){
+				if (document.getElementById('pqw_complete_overlay')) return;
+				pqwCheckCompleteStatus(function(res){
+					if (res && res.success && res.data) {
+						var pending = parseInt(res.data.pending,10) || 0;
+						if (pending > 0) {
+							pqwCreateCompleteOverlay(pending);
+							pqwRemoveQueryParam('pqw_complete_queued');
+							pqwTriggerCompleteProcessing();
+							setTimeout(pqwStartCompletePolling, 700);
+						}
+					}
+				});
+			});
+		})();
+	</script>
+	<?php
+
 	echo '</div>';
 }

@@ -131,11 +131,37 @@ function pqw_page_complete_name() {
 	// Neuer Abschnitt: berechne Gesamtpreis pro Kunde und ergänze das Array
 	if ( ! empty( $customers ) ) {
 		foreach ( $customers as $k => &$c ) {
-			$total = 0.0;
+			// Aggregate identical products for this customer (by product_id if available, otherwise by name)
+			$agg = array();
 			if ( ! empty( $c['rows'] ) ) {
 				foreach ( $c['rows'] as $r ) {
-					$total += floatval( $r['line_total'] );
+					$pid = ! empty( $r['product_id'] ) ? intval( $r['product_id'] ) : 0;
+					// key uses product id when present, otherwise sanitized name
+					$key = $pid ? 'pid_' . $pid : 'name_' . sanitize_title( $r['product_name'] );
+					if ( ! isset( $agg[ $key ] ) ) {
+						$agg[ $key ] = array(
+							'product_id'   => $pid,
+							'product_name' => $r['product_name'],
+							'quantity'     => 0,
+							'line_total'   => 0.0,
+						);
+					}
+					$agg[ $key ]['quantity']  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
+					$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 				}
+			}
+
+			// Replace rows with aggregated, sorted list (alphabetical by product_name)
+			$rows = array_values( $agg );
+			usort( $rows, function( $a, $b ) {
+				return strcasecmp( $a['product_name'], $b['product_name'] );
+			} );
+			$c['rows'] = $rows;
+
+			// recompute total from aggregated rows
+			$total = 0.0;
+			foreach ( $c['rows'] as $r ) {
+				$total += floatval( $r['line_total'] );
 			}
 			$c['total'] = $total;
 		}

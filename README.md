@@ -24,7 +24,7 @@ Das PQW Order-Management Plugin erweitert WooCommerce um leistungsstarke Funktio
 ### Queue-System
 
 - **Asynchrone Verarbeitung** für große Datenmengen
-- **Batch-Processing** (10 Einträge pro Durchlauf)
+- **Batch-Processing** (20 Einträge pro Durchlauf)
 - **Automatische Wiederholung** bei ausstehenden Einträgen
 - **WP-Cron Fallback** für zuverlässige Verarbeitung
 
@@ -97,7 +97,7 @@ Standard: 20 Einträge pro Durchlauf (anpassbar in `pqw_process_queue_handler()`
 
 Standard: Täglich, löscht Queue-Einträge älter als 7 Tage
 
-### Berechtigugen
+### Berechtigungen
 
 - `manage_woocommerce` - Vollzugriff auf alle Funktionen
 - `manage_options` - Alternative Berechtigung für Administratoren

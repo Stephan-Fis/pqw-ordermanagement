@@ -31,26 +31,8 @@ function pqw_page_complete_name() {
 		}
 
 		// Build rows for complete queue
-		$customers_all = array(); // reuse loader code to fetch on-hold orders
-		$args = array( 'limit'=>-1, 'status'=>'on-hold', 'return'=>'objects' );
-		$orders = wc_get_orders( $args );
-		if ( $orders ) {
-			foreach ( $orders as $order ) {
-				$user_id = $order->get_user_id();
-				$billing_email = $order->get_billing_email();
-				$customer_key = $user_id ? 'user_' . intval( $user_id ) : 'guest_' . sanitize_email( $billing_email );
-				if ( ! isset( $customers_all[ $customer_key ] ) ) {
-					$customers_all[ $customer_key ] = array( 'rows' => array() );
-				}
-				foreach ( $order->get_items() as $item_id => $item ) {
-					if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) continue;
-					$customers_all[ $customer_key ]['rows'][] = array(
-						'order_id' => $order->get_id(),
-						'order_item_id' => $item_id,
-					);
-				}
-			}
-		}
+		// reuse centralized loader so variation_id logic is identical to split pages
+		$customers_all = method_exists( $pqw_order_management, 'get_customers_by_status' ) ? $pqw_order_management->get_customers_by_status( 'on-hold' ) : array();
 
 		$rows = array();
 		foreach ( $selected_customers as $ck ) {
@@ -83,71 +65,54 @@ function pqw_page_complete_name() {
 		return;
 	}
 
-	// Load on-hold orders and group by customer (same as export build)
-	$args = array(
-		'limit'  => -1,
-		'orderby'=> 'date',
-		'order'  => 'ASC',
-		'return' => 'objects',
-		'status' => 'on-hold',
-	);
-	$orders = wc_get_orders( $args );
-	$customers = array();
-	if ( $orders ) {
-		foreach ( $orders as $order ) {
-			$user_id = $order->get_user_id();
-			$billing_email = $order->get_billing_email();
-			$billing_first = $order->get_billing_first_name();
-			$billing_last  = $order->get_billing_last_name();
+	// use central loader so complete view uses the same variation-id extraction as split
+	$customers = method_exists( $pqw_order_management, 'get_customers_by_status' ) ? $pqw_order_management->get_customers_by_status( 'on-hold' ) : array();
 
-			$customer_key = $user_id ? 'user_' . intval( $user_id ) : 'guest_' . sanitize_email( $billing_email );
-
-			if ( ! isset( $customers[ $customer_key ] ) ) {
-				$customers[ $customer_key ] = array(
-					'user_id'       => $user_id,
-					'email'         => $billing_email,
-					'first_name'    => $billing_first,
-					'last_name'     => $billing_last,
-					'rows'          => array(),
-				);
-			}
-
-			foreach ( $order->get_items() as $item_id => $item ) {
-				if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) {
-					continue;
-				}
-				$customers[ $customer_key ]['rows'][] = array(
-					'order_id'       => $order->get_id(),
-					'order_item_id'  => $item_id,
-					'product_id'     => $item->get_product_id(),
-					'product_name'   => $item->get_name(),
-					'quantity'       => $item->get_quantity(),
-					'line_total'     => floatval( $item->get_total() ),
-				);
-			}
-		}
-	}
-
-	// Neuer Abschnitt: berechne Gesamtpreis pro Kunde und ergänze das Array
+	// Neuer Abschnitt: nur echte Varianten (variation_id > 0) zusammenfassen,
+	// Nicht-Varianten bleiben einzelne Zeilen (pro order_item), so wie bei split.
 	if ( ! empty( $customers ) ) {
 		foreach ( $customers as $k => &$c ) {
-			// Aggregate identical products for this customer (by product_id if available, otherwise by name)
 			$agg = array();
-			if ( ! empty( $c['rows'] ) ) {
-				foreach ( $c['rows'] as $r ) {
+			if ( ! empty( $c['rows' ] ) ) {
+				foreach ( $c['rows' ] as $r ) {
 					$pid = ! empty( $r['product_id'] ) ? intval( $r['product_id'] ) : 0;
-					// key uses product id when present, otherwise sanitized name
-					$key = $pid ? 'pid_' . $pid : 'name_' . sanitize_title( $r['product_name'] );
-					if ( ! isset( $agg[ $key ] ) ) {
-						$agg[ $key ] = array(
-							'product_id'   => $pid,
-							'product_name' => $r['product_name'],
-							'quantity'     => 0,
-							'line_total'   => 0.0,
-						);
+					$vid = ! empty( $r['variation_id'] ) ? intval( $r['variation_id'] ) : 0;
+
+					if ( $vid > 0 ) {
+						// Varianten über alle Bestellungen zusammenfassen
+						$key = 'vid_' . $vid;
+						// Produktname ohne Variantenlabel (keine Anzeige der Varianten-Name/ID)
+						$name_field = isset( $r['product_name'] ) ? $r['product_name'] : '';
+
+						if ( ! isset( $agg[ $key ] ) ) {
+							$agg[ $key ] = array(
+								'product_id'    => $vid,
+								'product_name'  => $name_field,
+								'variation_id'  => $vid,
+								'variant_label' => ( ! empty( $r['variant_label'] ) ? $r['variant_label'] : '' ),
+								'quantity'      => 0,
+								'line_total'    => 0.0,
+								'is_variant'    => true,
+							);
+						}
+						$agg[ $key ]['quantity']  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
+						$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
+
+					} else {
+						// Keine Variante: behalte einzelne Zeile pro order_item (kein globales Zusammenfassen)
+						$key = 'p' . $pid . '_o' . intval( $r['order_id'] ) . '_i' . intval( $r['order_item_id'] );
+						if ( ! isset( $agg[ $key ] ) ) {
+							$agg[ $key ] = array(
+								'product_id'    => $pid,
+								'product_name'  => isset( $r['product_name'] ) ? $r['product_name'] : '',
+								'variation_id'  => 0,
+								'variant_label' => '',
+								'quantity'      => intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 ),
+								'line_total'    => floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 ),
+								'is_variant'    => false,
+							);
+						}
 					}
-					$agg[ $key ]['quantity']  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
-					$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 				}
 			}
 
@@ -349,7 +314,8 @@ function pqw_page_complete_name() {
 				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '">' . esc_html( $display_name ) . '</td>';
 				$first_row = false;
 			}
-			echo '<td>' . esc_html( $row['product_name'] ) . '</td>';
+			// Artikel-Name
+			echo '<td data-label="Artikel">' . esc_html( $row['product_name'] ) . '</td>';
 			echo '<td>' . intval( $row['quantity'] ) . '</td>';
 			// Stückpreis berechnen (linie_total / menge)
 			$unit_price = ( intval( $row['quantity'] ) > 0 ) ? ( floatval( $row['line_total'] ) / intval( $row['quantity'] ) ) : floatval( $row['line_total'] );

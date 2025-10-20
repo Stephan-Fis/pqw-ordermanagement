@@ -36,12 +36,34 @@ function pqw_page_split_item() {
 		// parse items into map: order_id => array(order_item_id,...)
 		$by_order = array();
 		$customers = $pqw_order_management->get_processing_customers();
+
+		// Items may be keys like 'v123' (variant 123) or 'p123' (product 123)
 		foreach ( $customers as $cust_data ) {
 			foreach ( $cust_data['rows'] as $r ) {
 				$order_id = isset( $r['order_id'] ) ? intval( $r['order_id'] ) : 0;
 				$item_id  = isset( $r['order_item_id'] ) ? intval( $r['order_item_id'] ) : 0;
 				$prod_id  = isset( $r['product_id'] ) ? intval( $r['product_id'] ) : 0;
-				if ( $order_id && $item_id && in_array( $prod_id, array_map( 'intval', $items ), true ) ) {
+				$var_id   = isset( $r['variation_id'] ) ? intval( $r['variation_id'] ) : 0;
+
+				if ( ! $order_id || ! $item_id ) {
+					continue;
+				}
+
+				$match = false;
+				// prefer explicit variant key if present
+				if ( $var_id > 0 && in_array( 'v' . $var_id, $items, true ) ) {
+					$match = true;
+				}
+				// product key 'p{id}'
+				elseif ( in_array( 'p' . $prod_id, $items, true ) ) {
+					$match = true;
+				}
+				// backward-compatibility: numeric product ids (old behavior)
+				elseif ( in_array( (string) $prod_id, $items, true ) ) {
+					$match = true;
+				}
+
+				if ( $match ) {
 					if ( ! isset( $by_order[ $order_id ] ) ) {
 						$by_order[ $order_id ] = array();
 					}
@@ -96,24 +118,58 @@ function pqw_page_split_item() {
 
 	// Fetch data (customers -> rows) and aggregate by product_id
 	$customers = $pqw_order_management->get_processing_customers();
-	$aggregated = array(); // product_id => [product_name, short_desc, full_desc, quantity]
+	$aggregated = array(); // aggregated keyed: variant => combined, non-variants => unique entry per order-item
 	foreach ( $customers as $cust_data ) {
 		foreach ( $cust_data['rows'] as $r ) {
 			$pid = isset( $r['product_id'] ) ? intval( $r['product_id'] ) : 0;
+			$vid = isset( $r['variation_id'] ) ? intval( $r['variation_id'] ) : 0;
 			if ( ! $pid ) {
 				continue;
 			}
-			if ( ! isset( $aggregated[ $pid ] ) ) {
-				$aggregated[ $pid ] = array(
-					'product_id'   => $pid,
-					'product_name' => isset( $r['product_name'] ) ? $r['product_name'] : '',
-					'short_desc'   => isset( $r['short_desc'] ) ? $r['short_desc'] : '',
-					'full_desc'    => isset( $r['full_desc'] ) ? $r['full_desc'] : '',
-					'quantity'     => 0,
-				);
+
+			// Wenn Variante vorhanden => nach Variation zusammenfassen (gleiches Variation-ID = gleiche Variante)
+			if ( $vid > 0 ) {
+				$key = 'v' . $vid; // variant-key: aggregiert über alle Bestellungen
+				if ( ! isset( $aggregated[ $key ] ) ) {
+					$aggregated[ $key ] = array(
+						'product_id'    => $vid, // use variation id for key/identifikation
+						'product_name'  => isset( $r['product_name'] ) ? $r['product_name'] : '',
+						'variation_id'  => $vid,
+						'variant_label' => isset( $r['variant_label'] ) ? $r['variant_label'] : '',
+						'short_desc'    => isset( $r['short_desc'] ) ? $r['short_desc'] : '',
+						'full_desc'     => isset( $r['full_desc'] ) ? $r['full_desc'] : '',
+						'quantity'      => 0,
+						'is_variant'    => true,
+					);
+				}
+				$aggregated[ $key ]['quantity'] += isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0;
+			} else {
+				// Keine Variante -> NICHT zusammenfassen: eindeutiger Key pro Order-Item (zeigt Einträge unverändert)
+				$key = 'p' . $pid . '_o' . intval( $r['order_id'] ) . '_i' . intval( $r['order_item_id'] );
+				if ( ! isset( $aggregated[ $key ] ) ) {
+					$aggregated[ $key ] = array(
+						'product_id'    => $pid,
+						'product_name'  => isset( $r['product_name'] ) ? $r['product_name'] : '',
+						'variation_id'  => 0,
+						'variant_label' => '',
+						'short_desc'    => isset( $r['short_desc'] ) ? $r['short_desc'] : '',
+						'full_desc'     => isset( $r['full_desc'] ) ? $r['full_desc'] : '',
+						'quantity'      => isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0,
+						'is_variant'    => false,
+					);
+				} else {
+					// Fallback: falls seltsamerweise bereits existiert, addieren
+					$aggregated[ $key ]['quantity'] += isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0;
+				}
 			}
-			$aggregated[ $pid ]['quantity'] += isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0;
 		}
+	}
+
+	// NEW: sort aggregated items by product_name (case-insensitive) for alphabetical display
+	if ( ! empty( $aggregated ) ) {
+		uasort( $aggregated, function( $a, $b ) {
+			return strcasecmp( (string) $a['product_name'], (string) $b['product_name'] );
+		} );
 	}
 
 	if ( empty( $aggregated ) ) {
@@ -143,13 +199,13 @@ function pqw_page_split_item() {
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead><tbody>';
 
-	foreach ( $aggregated as $agg ) {
-		$pid   = intval( $agg['product_id'] );
+	foreach ( $aggregated as $key => $agg ) {
 		$prod  = esc_html( $agg['product_name'] );
+		$variant_label = ! empty( $agg['variant_label'] ) ? esc_html( $agg['variant_label'] ) : '';
 		$short = esc_html( wp_trim_words( wp_strip_all_tags( $agg['short_desc'] ), 20, '…' ) );
 		$full  = esc_html( wp_trim_words( wp_strip_all_tags( $agg['full_desc'] ), 30, '…' ) );
 		$qty   = intval( $agg['quantity'] );
-		$labelVal = esc_attr( $pid );
+		$labelVal = esc_attr( $key ); // 'v{vid}' or 'p{pid}'
 
 		echo '<tr>';
 		echo '<td data-label="Auswählen"><input type="checkbox" name="items[]" value="' . $labelVal . '" class="pqw-item-checkbox" /></td>';

@@ -22,7 +22,8 @@ function pqw_page_complete_item() {
 			wp_die( __( 'Nonce ungültig', 'pqw-order-management' ) );
 		}
 
-		$selected_products = isset( $_POST['products'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['products'] ) ) : array();
+		// we use string keys like 'v123' for variants and 'p123' for products
+		$selected_products = isset( $_POST['products'] ) ? array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['products'] ) ) : array();
 		$selected_products = array_filter( array_unique( $selected_products ) );
 
 		if ( ! empty( $selected_products ) ) {
@@ -34,8 +35,10 @@ function pqw_page_complete_item() {
 				foreach ( $orders as $order ) {
 					foreach ( $order->get_items() as $item_id => $item ) {
 						if ( ! is_a( $item, 'WC_Order_Item_Product' ) ) continue;
-						$pid = intval( $item->get_product_id() );
-						if ( in_array( $pid, $selected_products, true ) ) {
+						$pid  = intval( $item->get_product_id() );
+						$vid  = method_exists( $item, 'get_variation_id' ) ? intval( $item->get_variation_id() ) : 0;
+						$key  = $vid > 0 ? 'v' . $vid : 'p' . $pid;
+						if ( in_array( $key, $selected_products, true ) ) {
 							$rows[] = array( 'order_id' => $order->get_id(), 'order_item_id' => $item_id );
 						}
 					}
@@ -73,7 +76,7 @@ function pqw_page_complete_item() {
 		return;
 	}
 
-	// Build aggregated products from on-hold orders
+	// Build aggregated products from on-hold orders (now: aggregate by variant when present)
 	// Load orders with status "on-hold" and aggregate items by product_id
 	$args = array(
 		'limit'  => -1,
@@ -91,25 +94,38 @@ function pqw_page_complete_item() {
 					continue;
 				}
 				$pid  = intval( $item->get_product_id() );
-				if ( ! $pid ) {
+				$vid  = method_exists( $item, 'get_variation_id' ) ? intval( $item->get_variation_id() ) : 0;
+				if ( ! $pid && ! $vid ) {
 					continue;
 				}
-				if ( ! isset( $aggregated[ $pid ] ) ) {
-					$aggregated[ $pid ] = array(
-						'product_id'   => $pid,
+				$key = $vid > 0 ? 'v' . $vid : 'p' . $pid;
+				if ( ! isset( $aggregated[ $key ] ) ) {
+					$product = $item->get_product();
+					$short = '';
+					$full  = '';
+					if ( $product && is_object( $product ) ) {
+						$short = $product->get_short_description();
+						$full  = $product->get_description();
+					}
+					// show variant_label for variants if possible
+					$variant_label = '';
+					if ( $vid > 0 ) {
+						try {
+							if ( function_exists( 'wc_get_formatted_variation' ) && $product ) {
+								$variant_label = wc_get_formatted_variation( $product, true );
+							}
+						} catch ( Exception $e ) { $variant_label = ''; }
+					}
+					$aggregated[ $key ] = array(
+						'product_id'   => $vid > 0 ? $vid : $pid,
 						'product_name' => $item->get_name(),
-						'short_desc'   => '', // product short/long descriptions are optional; can be filled from product object if needed
-						'full_desc'    => '',
+						'variant_label'=> $variant_label,
+						'short_desc'   => $short,
+						'full_desc'    => $full,
 						'quantity'     => 0,
 					);
-					// try to get descriptions from product object
-					$product = $item->get_product();
-					if ( $product && is_object( $product ) ) {
-						$aggregated[ $pid ]['short_desc'] = $product->get_short_description();
-						$aggregated[ $pid ]['full_desc']  = $product->get_description();
-					}
 				}
-				$aggregated[ $pid ]['quantity'] += intval( $item->get_quantity() );
+				$aggregated[ $key ]['quantity'] += intval( $item->get_quantity() );
 			}
 		}
 	}
@@ -121,13 +137,14 @@ function pqw_page_complete_item() {
 		} );
 	}
 
+	// Wenn keine aggregierten Artikel vorhanden sind: Tabelle nicht zeigen, stattdessen Hinweis und beenden
 	if ( empty( $aggregated ) ) {
 		echo '<p>Keine "wartend" Bestellungen / Artikel gefunden.</p>';
 		echo '</div>';
 		return;
 	}
 
-	// Build per-product per-customer aggregation for export (product_id => customer_key => data)
+	// Build per-product per-customer aggregation for export (key => customer_key => data)
 	$product_customers = array();
 	if ( $orders ) {
 		foreach ( $orders as $order ) {
@@ -146,14 +163,24 @@ function pqw_page_complete_item() {
 					continue;
 				}
 				$pid = intval( $item->get_product_id() );
-				if ( ! $pid ) {
-					continue;
+				$vid = method_exists( $item, 'get_variation_id' ) ? intval( $item->get_variation_id() ) : 0;
+				$key = $vid > 0 ? 'v' . $vid : 'p' . $pid;
+				if ( ! isset( $product_customers[ $key ] ) ) {
+					$product_customers[ $key ] = array();
 				}
-				if ( ! isset( $product_customers[ $pid ] ) ) {
-					$product_customers[ $pid ] = array();
-				}
-				if ( ! isset( $product_customers[ $pid ][ $customer_key ] ) ) {
-					$product_customers[ $pid ][ $customer_key ] = array(
+				if ( ! isset( $product_customers[ $key ][ $customer_key ] ) ) {
+					$product_obj = $item->get_product();
+					$short = $product_obj && is_object( $product_obj ) ? $product_obj->get_short_description() : '';
+					$full  = $product_obj && is_object( $product_obj ) ? $product_obj->get_description() : '';
+					$variant_label = '';
+					if ( $vid > 0 ) {
+						try {
+							if ( function_exists( 'wc_get_formatted_variation' ) && $product_obj ) {
+								$variant_label = wc_get_formatted_variation( $product_obj, true );
+							}
+						} catch ( Exception $e ) { $variant_label = ''; }
+					}
+					$product_customers[ $key ][ $customer_key ] = array(
 						'person_name'  => $person_name,
 						'email'        => $billing_email,
 						'first_name'   => $billing_first,
@@ -161,19 +188,13 @@ function pqw_page_complete_item() {
 						'quantity'     => 0,
 						'total'        => 0.0,
 						'product_name' => $item->get_name(),
+						'short_desc'   => $short,
+						'full_desc'    => $full,
+						'variant_label'=> $variant_label,
 					);
-					// try to fill descriptions from product object
-					$product = $item->get_product();
-					if ( $product && is_object( $product ) ) {
-						$product_customers[ $pid ][ $customer_key ]['short_desc'] = $product->get_short_description();
-						$product_customers[ $pid ][ $customer_key ]['full_desc']  = $product->get_description();
-					} else {
-						$product_customers[ $pid ][ $customer_key ]['short_desc'] = '';
-						$product_customers[ $pid ][ $customer_key ]['full_desc']  = '';
-					}
-				}
-				$product_customers[ $pid ][ $customer_key ]['quantity'] += intval( $item->get_quantity() );
-				$product_customers[ $pid ][ $customer_key ]['total']    += floatval( $item->get_total() );
+ 				}
+				$product_customers[ $key ][ $customer_key ]['quantity'] += intval( $item->get_quantity() );
+				$product_customers[ $key ][ $customer_key ]['total']    += floatval( $item->get_total() );
 			}
 		}
 	}
@@ -409,13 +430,13 @@ function pqw_page_complete_item() {
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead><tbody>';
 
-	foreach ( $aggregated as $agg ) {
-		$pid   = intval( $agg['product_id'] );
+	foreach ( $aggregated as $key => $agg ) {
 		$prod  = esc_html( $agg['product_name'] );
+		$variant_label = ! empty( $agg['variant_label'] ) ? esc_html( $agg['variant_label'] ) : '';
 		$short = esc_html( wp_trim_words( wp_strip_all_tags( $agg['short_desc'] ), 20, '…' ) );
 		$full  = esc_html( wp_trim_words( wp_strip_all_tags( $agg['full_desc'] ), 30, '…' ) );
 		$qty   = intval( $agg['quantity'] );
-		$labelVal = esc_attr( $pid );
+		$labelVal = esc_attr( $key ); // key is 'v123' or 'p123'
 
 		echo '<tr>';
 		echo '<td data-label="Auswählen"><input type="checkbox" name="products[]" value="' . $labelVal . '" class="pqw-product-checkbox" /></td>';

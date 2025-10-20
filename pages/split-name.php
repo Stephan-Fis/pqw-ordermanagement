@@ -95,7 +95,141 @@ function pqw_page_split_name() {
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
 	echo '<span class="description">Markierte Personen: alle Bestellungen/Artikel dieser Person werden getrennt/auf "wartend" gesetzt.</span>';
 	echo '</p>';
-	$pqw_order_management->render_orders_table( $customers );
+
+	// Replace the simple table rendering with aggregated per-customer view:
+	// Varianten (vid>0) werden unter 'v{vid}' aggregiert, Artikel ohne Variante unter 'p{pid}' aggregiert.
+	$aggregated_by_customer = array();
+	foreach ( $customers as $cust_key => $cust_data ) {
+		$agg = array();
+		foreach ( $cust_data['rows'] as $r ) {
+			$pid = isset( $r['product_id'] ) ? intval( $r['product_id'] ) : 0;
+			$vid = isset( $r['variation_id'] ) ? intval( $r['variation_id'] ) : 0;
+			if ( ! $pid ) {
+				continue;
+			}
+			if ( $vid > 0 ) {
+				$key = 'v' . $vid;
+				if ( ! isset( $agg[ $key ] ) ) {
+					$agg[ $key ] = array(
+						'product_id'    => $vid,
+						'product_name'  => isset( $r['product_name'] ) ? $r['product_name'] : '',
+						'variation_id'  => $vid,
+						'variant_label' => isset( $r['variant_label'] ) ? $r['variant_label'] : '',
+						'short_desc'    => isset( $r['short_desc'] ) ? $r['short_desc'] : '',
+						'full_desc'     => isset( $r['full_desc'] ) ? $r['full_desc'] : '',
+						'quantity'      => 0,
+					);
+				}
+				$agg[ $key ]['quantity'] += isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0;
+			} else {
+				// keine Variante -> nach Produkt zusammenfassen (p{pid})
+				$key = 'p' . $pid;
+				if ( ! isset( $agg[ $key ] ) ) {
+					$agg[ $key ] = array(
+						'product_id'    => $pid,
+						'product_name'  => isset( $r['product_name'] ) ? $r['product_name'] : '',
+						'variation_id'  => 0,
+						'variant_label' => '',
+						'short_desc'    => isset( $r['short_desc'] ) ? $r['short_desc'] : '',
+						'full_desc'     => isset( $r['full_desc'] ) ? $r['full_desc'] : '',
+						'quantity'      => 0,
+					);
+				}
+				$agg[ $key ]['quantity'] += isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0;
+			}
+		}
+		$aggregated_by_customer[ $cust_key ] = array(
+			'customer' => $cust_data,
+			'items'    => $agg,
+		);
+	}
+
+	// NEW: sort items per customer by product_name (case-insensitive)
+	foreach ( $aggregated_by_customer as $ck => $cd ) {
+		if ( ! empty( $aggregated_by_customer[ $ck ]['items'] ) ) {
+			uasort( $aggregated_by_customer[ $ck ]['items'], function( $a, $b ) {
+				return strcasecmp( (string) $a['product_name'], (string) $b['product_name'] );
+			} );
+		}
+	}
+
+	// NEW: sort customers by last_name, then first_name (case-insensitive)
+	if ( ! empty( $aggregated_by_customer ) ) {
+		uasort( $aggregated_by_customer, function( $a, $b ) {
+			$la = isset( $a['customer']['last_name'] ) ? $a['customer']['last_name'] : '';
+			$fa = isset( $a['customer']['first_name'] ) ? $a['customer']['first_name'] : '';
+			$lb = isset( $b['customer']['last_name'] ) ? $b['customer']['last_name'] : '';
+			$fb = isset( $b['customer']['first_name'] ) ? $b['customer']['first_name'] : '';
+			$cmp = strcasecmp( trim( $la ), trim( $lb ) );
+			if ( 0 === $cmp ) {
+				return strcasecmp( trim( $fa ), trim( $fb ) );
+			}
+			return $cmp;
+		} );
+	}
+
+	// Render aggregated table: checkbox per customer, customer cell rowspan = count(aggregated items)
+	echo '<div class="pqw-orders-table">';
+	echo '<div class="table-responsive">';
+	echo '<table class="table table-striped table-bordered">';
+	echo '<thead class="table-dark"><tr>';
+	echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
+	echo '<th scope="col">Person</th>';
+	echo '<th scope="col">Artikel</th>';
+	echo '<th scope="col">Kurzbeschreibung</th>';
+	echo '<th scope="col">Beschreibung</th>';
+	echo '<th scope="col">Gesamtmenge</th>';
+	echo '</tr></thead>';
+	echo '<tbody>';
+
+	foreach ( $aggregated_by_customer as $cust_key => $data ) {
+		$c = $data['customer'];
+		// NEW: show "Nachname, Vorname" serverseitig and fallback to email/guest
+		$last = isset( $c['last_name'] ) ? trim( $c['last_name'] ) : '';
+		$first = isset( $c['first_name'] ) ? trim( $c['first_name'] ) : '';
+		if ( $last && $first ) {
+			$display_name = $last . ', ' . $first;
+		} elseif ( $last ) {
+			$display_name = $last;
+		} elseif ( $first ) {
+			$display_name = $first;
+		} else {
+			$display_name = $c['email'] ? $c['email'] : __( 'Gast', 'pqw-order-management' );
+		}
+		$items = $data['items'];
+		if ( empty( $items ) ) {
+			continue;
+		}
+		$rows_count = count( $items );
+		$first = true;
+		foreach ( $items as $it ) {
+			echo '<tr>';
+			// checkbox only on first row of customer
+			if ( $first ) {
+				echo '<td data-label="Select"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
+			} else {
+				echo '<td data-label="Select"></td>';
+			}
+
+			if ( $first ) {
+				$person_html = '<div class="pqw-customer-name">' . esc_html( $display_name ) . '</div>';
+				echo '<td rowspan="' . esc_attr( $rows_count ) . '" data-label="Person">' . $person_html . '</td>';
+				$first = false;
+			}
+
+			echo '<td data-label="Artikel">' . esc_html( $it['product_name'] ) . '</td>';
+			echo '<td data-label="Kurzbeschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $it['short_desc'] ), 20, '…' ) ) . '</td>';
+			echo '<td data-label="Beschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $it['full_desc'] ), 30, '…' ) ) . '</td>';
+			echo '<td data-label="Gesamtmenge">' . intval( $it['quantity'] ) . '</td>';
+			echo '</tr>';
+		}
+	}
+
+	echo '</tbody>';
+	echo '</table>';
+	echo '</div>'; // .table-responsive
+	echo '</div>'; // .pqw-orders-table
+
 	echo '</form>';
 
 	// select all JS reused -> erweitert um Export-Funktion

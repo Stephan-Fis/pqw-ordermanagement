@@ -3,7 +3,7 @@
  * Plugin Name: PQW Order-Management
  * Plugin URI:  https://fischer-it.eu/pqw-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.7.2-251019_22
+ * Version:     1.8.0-251020_12
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: pqw-order-management
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class PQW_Order_Management {
 
-	const VERSION = '1.7.2-251019_22';
+	const VERSION = '1.8.0-251020_12';
 	const PLUGIN_SLUG = 'pqw-order-management';
 
 	// Store main menu hook suffix
@@ -326,16 +326,16 @@ class PQW_Order_Management {
 	}
 
 	/**
-	 * Fetch orders with status 'processing' and group them by customer.
-	 * Now also stores order_item_id for queue entries.
+	 * Fetch orders with a given status and group them by customer.
+	 * Generalized loader used by processing / complete pages to ensure consistent variation-id extraction.
 	 */
-	public function get_processing_customers() {
+	public function get_customers_by_status( $status = 'processing' ) {
 		$args = array(
 			'limit'  => -1,
 			'orderby'=> 'date',
 			'order'  => 'ASC',
 			'return' => 'objects',
-			'status' => 'processing',
+			'status' => $status,
 		);
 
 		$orders = wc_get_orders( $args );
@@ -372,6 +372,28 @@ class PQW_Order_Management {
 
 				$product = $item->get_product();
 				$product_id = $item->get_product_id();
+				// robust variation id (0 = not a variation)
+				$variation_id = $this->get_item_variation_id( $item );
+				// Try to use the actual variation product to build a reliable variant label
+				$variant_label = '';
+				try {
+					$variation_product = ( $variation_id > 0 ) ? wc_get_product( $variation_id ) : $product;
+					$use_product_for_label = $variation_product ? $variation_product : $product;
+					if ( $variation_id > 0 && $use_product_for_label && function_exists( 'wc_get_formatted_variation' ) ) {
+						$variant_label = wc_get_formatted_variation( $use_product_for_label, true );
+					} elseif ( $variation_id > 0 && $use_product_for_label && method_exists( $use_product_for_label, 'get_attributes' ) ) {
+						$attrs = $use_product_for_label->get_attributes();
+						if ( is_array( $attrs ) && ! empty( $attrs ) ) {
+							$tmp = array();
+							foreach ( $attrs as $k => $v ) {
+								$tmp[] = is_array( $v ) ? implode( '/', $v ) : (string) $v;
+							}
+							$variant_label = implode( ', ', $tmp );
+						}
+					}
+				} catch ( Exception $e ) {
+					$variant_label = '';
+				}
 				$product_name = $item->get_name();
 				$qty = $item->get_quantity();
 				$line_total = floatval( $item->get_total() );
@@ -386,6 +408,8 @@ class PQW_Order_Management {
 				$customers[ $customer_key ]['rows'][] = array(
 					'order_id'       => $order->get_id(),
 					'order_item_id'  => $item_id,
+					'variation_id'   => $variation_id,
+					'variant_label'  => $variant_label,
 					'product_id'     => $product_id,
 					'product_name'   => $product_name,
 					'short_desc'     => $short_desc,
@@ -409,6 +433,11 @@ class PQW_Order_Management {
 		return $customers;
 	}
 
+	// Backwards-compatible wrapper expected by older page handlers
+	public function get_processing_customers() {
+		return $this->get_customers_by_status( 'processing' );
+	}
+
 	/**
 	 * Render the table for a prepared $customers array.
 	 * Now: one checkbox per customer; removed customer total row.
@@ -422,6 +451,8 @@ class PQW_Order_Management {
 		echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
 		echo '<th scope="col">Person</th>';
 		echo '<th scope="col">Article</th>';
+		echo '<th scope="col">VariantenID</th>';
+		echo '<th scope="col">Variantenlabel</th>';
 		echo '<th scope="col">Short description</th>';
 		echo '<th scope="col">Description</th>';
 		echo '<th scope="col">Amount</th>';
@@ -458,8 +489,12 @@ class PQW_Order_Management {
 					$first_row = false;
 				}
 
-				// Article
+				// Article: show name and variant label (if any)
 				echo '<td data-label="Article">' . esc_html( $row['product_name'] ) . '</td>';
+				// VariantenID
+				echo '<td data-label="VariantenID">' . ( isset( $row['variation_id'] ) ? intval( $row['variation_id'] ) : '' ) . '</td>';
+				// Variantenlabel
+				echo '<td data-label="Variantenlabel">' . ( ! empty( $row['variant_label'] ) ? '<div class="pqw-small">' . esc_html( $row['variant_label'] ) . '</div>' : '' ) . '</td>';
 				// Short description
 				echo '<td data-label="Short description">' . esc_html( wp_trim_words( wp_strip_all_tags( $row['short_desc'] ), 20, '…' ) ) . '</td>';
 				// Full description
@@ -478,6 +513,32 @@ class PQW_Order_Management {
 		echo '</table>';
 		echo '</div>'; // .table-responsive
 		echo '</div>'; // .pqw-orders-table
+	}
+
+	// NEW: robust helper to extract variation id from an order item (covers different WC versions / meta)
+	public function get_item_variation_id( $item ) {
+		$vid = 0;
+		if ( is_object( $item ) && method_exists( $item, 'get_variation_id' ) ) {
+			$vid = intval( $item->get_variation_id() );
+		}
+		if ( ! $vid && is_object( $item ) && method_exists( $item, 'get_meta' ) ) {
+			$meta_vid = $item->get_meta('_variation_id');
+			if ( empty( $meta_vid ) ) {
+				$meta_vid = $item->get_meta('variation_id');
+			}
+			if ( $meta_vid ) {
+				$vid = intval( $meta_vid );
+			}
+		}
+		try {
+			$product_obj = is_object( $item ) && method_exists( $item, 'get_product' ) ? $item->get_product() : null;
+			if ( $vid <= 0 && $product_obj && is_object( $product_obj ) && method_exists( $product_obj, 'is_type' ) && $product_obj->is_type( 'variation' ) ) {
+				$vid = intval( $product_obj->get_id() );
+			}
+		} catch ( Exception $e ) {
+			// ignore
+		}
+		return $vid;
 	}
 
 	/**
@@ -801,16 +862,49 @@ class PQW_Order_Management {
 				// ignore non-fatal
 			}
 
-			// create a new item for this new order
+			// identify product / variation for the original item
 			$product_id  = $item->get_product_id();
 			$qty         = $item->get_quantity();
 			$line_total  = $item->get_total();
-			$product_obj = wc_get_product( $product_id );
 
+			// robustly obtain variation id (use helper that covers WC versions)
+			$variation_id = 0;
+			if ( method_exists( $item, 'get_variation_id' ) ) {
+				$variation_id = intval( $item->get_variation_id() );
+			}
+			if ( ! $variation_id ) {
+				// fallback to class helper (works with meta or product object)
+				try {
+					$variation_id = $this->get_item_variation_id( $item );
+				} catch ( Exception $e ) {
+					$variation_id = 0;
+				}
+			}
+
+			// Prefer variation product object if available
+			$product_obj = null;
+			if ( $variation_id > 0 ) {
+				$product_obj = wc_get_product( $variation_id );
+			}
+			if ( ! $product_obj ) {
+				$product_obj = wc_get_product( $product_id );
+			}
+
+			// create a new item for this new order
 			$new_item = new WC_Order_Item_Product();
+
+			// Ensure product_id / variation_id are preserved in the new item.
+			if ( method_exists( $new_item, 'set_product_id' ) ) {
+				$new_item->set_product_id( $product_id );
+			}
+			if ( method_exists( $new_item, 'set_variation_id' ) ) {
+				$new_item->set_variation_id( $variation_id );
+			}
+			// Set associated product object (variation if available)
 			if ( $product_obj ) {
 				$new_item->set_product( $product_obj );
 			}
+
 			$new_item->set_quantity( $qty );
 			$new_item->set_total( $line_total );
 			$new_item->set_name( $item->get_name() );
@@ -820,6 +914,18 @@ class PQW_Order_Management {
 			if ( ! empty( $meta ) ) {
 				foreach ( $meta as $m ) {
 					$new_item->add_meta_data( $m->key, $m->value );
+				}
+			}
+
+			// Ensure older WC versions also have explicit _variation_id meta so the item is recognized as variant
+			if ( $variation_id > 0 ) {
+				try {
+					$existing = $new_item->get_meta( '_variation_id', true );
+					if ( empty( $existing ) ) {
+						$new_item->add_meta_data( '_variation_id', $variation_id );
+					}
+				} catch ( Exception $e ) {
+					// ignore
 				}
 			}
 

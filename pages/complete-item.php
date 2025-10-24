@@ -100,28 +100,28 @@ function pqw_page_complete_item() {
 				}
 				$key = $vid > 0 ? 'v' . $vid : 'p' . $pid;
 				if ( ! isset( $aggregated[ $key ] ) ) {
-					$product = $item->get_product();
-					$short = '';
-					$full  = '';
-					if ( $product && is_object( $product ) ) {
-						$short = $product->get_short_description();
-						$full  = $product->get_description();
-					}
-					// show variant_label for variants if possible
+					// Use parent product (pid) for name and descriptions. Do NOT use the variation as fallback.
+					$parent_obj = $pid > 0 ? wc_get_product( $pid ) : null;
+					$parent_name  = $parent_obj && method_exists( $parent_obj, 'get_name' ) ? (string) $parent_obj->get_name() : $item->get_name();
+					$parent_short = $parent_obj && method_exists( $parent_obj, 'get_short_description' ) ? (string) $parent_obj->get_short_description() : '';
+					$parent_full  = $parent_obj && method_exists( $parent_obj, 'get_description' ) ? (string) $parent_obj->get_description() : '';
+					// variant label from item (variation) only
 					$variant_label = '';
 					if ( $vid > 0 ) {
 						try {
-							if ( function_exists( 'wc_get_formatted_variation' ) && $product ) {
-								$variant_label = wc_get_formatted_variation( $product, true );
+							$prod_for_label = $item->get_product();
+							if ( function_exists( 'wc_get_formatted_variation' ) && $prod_for_label ) {
+								$variant_label = wc_get_formatted_variation( $prod_for_label, true );
 							}
 						} catch ( Exception $e ) { $variant_label = ''; }
 					}
 					$aggregated[ $key ] = array(
-						'product_id'   => $vid > 0 ? $vid : $pid,
-						'product_name' => $item->get_name(),
+						// always store parent product id
+						'product_id'   => $pid,
+						'product_name' => $parent_name,
 						'variant_label'=> $variant_label,
-						'short_desc'   => $short,
-						'full_desc'    => $full,
+						'short_desc'   => $parent_short,
+						'full_desc'    => $parent_full,
 						'quantity'     => 0,
 					);
 				}
@@ -169,14 +169,17 @@ function pqw_page_complete_item() {
 					$product_customers[ $key ] = array();
 				}
 				if ( ! isset( $product_customers[ $key ][ $customer_key ] ) ) {
-					$product_obj = $item->get_product();
-					$short = $product_obj && is_object( $product_obj ) ? $product_obj->get_short_description() : '';
-					$full  = $product_obj && is_object( $product_obj ) ? $product_obj->get_description() : '';
+					// Use parent product (pid) for descriptions and product name (no variant fallback).
+					$parent_obj = $pid > 0 ? wc_get_product( $pid ) : null;
+					$parent_name  = $parent_obj && method_exists( $parent_obj, 'get_name' ) ? (string) $parent_obj->get_name() : $item->get_name();
+					$parent_short = $parent_obj && method_exists( $parent_obj, 'get_short_description' ) ? (string) $parent_obj->get_short_description() : '';
+					$parent_full  = $parent_obj && method_exists( $parent_obj, 'get_description' ) ? (string) $parent_obj->get_description() : '';
 					$variant_label = '';
 					if ( $vid > 0 ) {
 						try {
-							if ( function_exists( 'wc_get_formatted_variation' ) && $product_obj ) {
-								$variant_label = wc_get_formatted_variation( $product_obj, true );
+							$prod_for_label = $item->get_product();
+							if ( function_exists( 'wc_get_formatted_variation' ) && $prod_for_label ) {
+								$variant_label = wc_get_formatted_variation( $prod_for_label, true );
 							}
 						} catch ( Exception $e ) { $variant_label = ''; }
 					}
@@ -187,9 +190,9 @@ function pqw_page_complete_item() {
 						'last_name'    => $billing_last,
 						'quantity'     => 0,
 						'total'        => 0.0,
-						'product_name' => $item->get_name(),
-						'short_desc'   => $short,
-						'full_desc'    => $full,
+						'product_name' => $parent_name,
+						'short_desc'   => $parent_short,
+						'full_desc'    => $parent_full,
 						'variant_label'=> $variant_label,
 					);
  				}
@@ -242,8 +245,10 @@ function pqw_page_complete_item() {
 					var key = checked[i].value;
 					var p = pqw_export_products[key];
 					if (!p) continue;
+					var title = (p.product_name || '');
+					if (p.variant_label) title = title + ' — ' + p.variant_label;
 					rows.push({
-						'Artikel': p.product_name || '',
+						'Artikel': title,
 						'Beschreibung': (p.full_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
 						'Kurzbeschreibung': (p.short_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
 						'Gesamtmenge': parseInt(p.quantity || 0, 10)
@@ -307,8 +312,11 @@ function pqw_page_complete_item() {
 								lastName: entry.last_name || ''
 							};
 						}
+						// include variant label in exported product name (if present)
+						var title = (entry.product_name || '');
+						if (entry.variant_label) title = title + ' — ' + entry.variant_label;
 						persons[custKey].rows.push({
-							product_name: entry.product_name || '',
+							product_name: title,
 							qty: qty,
 							unitPrice: unitPrice,
 							total: total
@@ -431,21 +439,19 @@ function pqw_page_complete_item() {
 	echo '</tr></thead><tbody>';
 
 	foreach ( $aggregated as $key => $agg ) {
-		// fallback: immer Produktinfos anzeigen, auch bei Varianten
-		$prod_raw = isset( $agg['product_name'] ) ? trim( $agg['product_name'] ) : '';
+		// Use parent product only for product info (no variant fallback)
+		$prod_raw  = isset( $agg['product_name'] ) ? trim( $agg['product_name'] ) : '';
 		$short_raw = isset( $agg['short_desc'] ) ? trim( $agg['short_desc'] ) : '';
-		$full_raw = isset( $agg['full_desc'] ) ? trim( $agg['full_desc'] ) : '';
-		$vid = isset( $agg['product_id'] ) && ! empty( $agg['variation_id'] ) ? intval( $agg['variation_id'] ) : ( isset( $agg['product_id'] ) ? intval( $agg['product_id'] ) : 0 );
-		$pid = isset( $agg['product_id'] ) ? intval( $agg['product_id'] ) : 0;
-		if ( $prod_raw === '' || $short_raw === '' || $full_raw === '' ) {
-			$prod_obj = null;
-			if ( ! empty( $agg['variation_id'] ) ) $prod_obj = wc_get_product( intval( $agg['variation_id'] ) );
-			if ( ! $prod_obj && $pid > 0 ) $prod_obj = wc_get_product( $pid );
+		$full_raw  = isset( $agg['full_desc'] ) ? trim( $agg['full_desc'] ) : '';
+		$pid       = isset( $agg['product_id'] ) ? intval( $agg['product_id'] ) : 0;
+		if ( ( $prod_raw === '' || $short_raw === '' || $full_raw === '' ) && $pid > 0 ) {
+			$prod_obj = wc_get_product( $pid );
 			if ( $prod_obj ) {
 				if ( $prod_raw === '' && method_exists( $prod_obj, 'get_name' ) ) $prod_raw = (string) $prod_obj->get_name();
 				if ( $short_raw === '' && method_exists( $prod_obj, 'get_short_description' ) ) $short_raw = (string) $prod_obj->get_short_description();
 				if ( $full_raw === '' && method_exists( $prod_obj, 'get_description' ) ) $full_raw = (string) $prod_obj->get_description();
 			}
+			// wenn parent keine Beschreibung hat, bleibt das Feld leer (kein Variant-Fallback)
 		}
 		$prod = esc_html( $prod_raw );
 		$variant_label = ! empty( $agg['variant_label'] ) ? esc_html( $agg['variant_label'] ) : '';
@@ -454,9 +460,14 @@ function pqw_page_complete_item() {
 		$qty   = intval( $agg['quantity'] );
 		$labelVal = esc_attr( $key ); // key is 'v123' or 'p123'
 
+		// make variants visible by appending variant label to the product display
+		$prod_display = $prod;
+		if ( $variant_label !== '' ) {
+			$prod_display = $prod_display . ' — ' . $variant_label;
+		}
 		echo '<tr>';
 		echo '<td data-label="Auswählen"><input type="checkbox" name="products[]" value="' . $labelVal . '" class="pqw-product-checkbox" /></td>';
-		echo '<td data-label="Artikel">' . $prod . '</td>';
+		echo '<td data-label="Artikel">' . esc_html( $prod_display ) . '</td>';
 		echo '<td data-label="Beschreibung">' . $full . '</td>';
 		echo '<td data-label="Kurzbeschreibung">' . $short . '</td>';
 		echo '<td data-label="Gesamtmenge">' . $qty . '</td>';

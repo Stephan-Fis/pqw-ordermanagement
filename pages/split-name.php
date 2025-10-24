@@ -203,6 +203,29 @@ function pqw_page_split_name() {
 		$rows_count = count( $items );
 		$first = true;
 		foreach ( $items as $it ) {
+			// NEW: ensure short/full desc exist; fallback to product/variation lookup if empty
+			$short = isset( $it['short_desc'] ) ? trim( $it['short_desc'] ) : '';
+			$full  = isset( $it['full_desc'] ) ? trim( $it['full_desc'] ) : '';
+			$vid = isset( $it['variation_id'] ) ? intval( $it['variation_id'] ) : 0;
+			$pid = isset( $it['product_id'] ) ? intval( $it['product_id'] ) : 0;
+			if ( $short === '' || $full === '' ) {
+				$prod = null;
+				if ( $vid > 0 ) {
+					$prod = wc_get_product( $vid );
+				}
+				if ( ! $prod && $pid > 0 ) {
+					$prod = wc_get_product( $pid );
+				}
+				if ( $prod ) {
+					if ( $short === '' && method_exists( $prod, 'get_short_description' ) ) {
+						$short = (string) $prod->get_short_description();
+					}
+					if ( $full === '' && method_exists( $prod, 'get_description' ) ) {
+						$full = (string) $prod->get_description();
+					}
+				}
+			}
+
 			echo '<tr>';
 			// checkbox only on first row of customer
 			if ( $first ) {
@@ -217,9 +240,30 @@ function pqw_page_split_name() {
 				$first = false;
 			}
 
-			echo '<td data-label="Artikel">' . esc_html( $it['product_name'] ) . '</td>';
-			echo '<td data-label="Kurzbeschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $it['short_desc'] ), 20, '…' ) ) . '</td>';
-			echo '<td data-label="Beschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $it['full_desc'] ), 30, '…' ) ) . '</td>';
+			// ensure product name + descriptions exist (fallback to variation/product)
+			$prod_raw = isset( $it['product_name'] ) ? trim( $it['product_name'] ) : '';
+			$short_raw = isset( $it['short_desc'] ) ? trim( $it['short_desc'] ) : '';
+			$full_raw = isset( $it['full_desc'] ) ? trim( $it['full_desc'] ) : '';
+			$vid = isset( $it['variation_id'] ) ? intval( $it['variation_id'] ) : 0;
+			$pid = isset( $it['product_id'] ) ? intval( $it['product_id'] ) : 0;
+			if ( $prod_raw === '' || $short_raw === '' || $full_raw === '' ) {
+				$prod_obj = null;
+				if ( $vid > 0 ) $prod_obj = wc_get_product( $vid );
+				if ( ! $prod_obj && $pid > 0 ) $prod_obj = wc_get_product( $pid );
+				if ( $prod_obj ) {
+					if ( $prod_raw === '' && method_exists( $prod_obj, 'get_name' ) ) $prod_raw = (string) $prod_obj->get_name();
+					if ( $short_raw === '' && method_exists( $prod_obj, 'get_short_description' ) ) $short_raw = (string) $prod_obj->get_short_description();
+					if ( $full_raw === '' && method_exists( $prod_obj, 'get_description' ) ) $full_raw = (string) $prod_obj->get_description();
+				}
+			}
+			$prod = esc_html( $prod_raw );
+			$variant_label = ! empty( $it['variant_label'] ) ? esc_html( $it['variant_label'] ) : '';
+			$short = esc_html( wp_trim_words( wp_strip_all_tags( $short_raw ), 20, '…' ) );
+			$full  = esc_html( wp_trim_words( wp_strip_all_tags( $full_raw ), 30, '…' ) );
+
+			echo '<td data-label="Artikel">' . esc_html( $prod ) . '</td>';
+			echo '<td data-label="Kurzbeschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $short ), 20, '…' ) ) . '</td>';
+			echo '<td data-label="Beschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $full ), 30, '…' ) ) . '</td>';
 			echo '<td data-label="Gesamtmenge">' . intval( $it['quantity'] ) . '</td>';
 			echo '</tr>';
 		}

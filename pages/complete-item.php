@@ -431,10 +431,26 @@ function pqw_page_complete_item() {
 	echo '</tr></thead><tbody>';
 
 	foreach ( $aggregated as $key => $agg ) {
-		$prod  = esc_html( $agg['product_name'] );
+		// fallback: immer Produktinfos anzeigen, auch bei Varianten
+		$prod_raw = isset( $agg['product_name'] ) ? trim( $agg['product_name'] ) : '';
+		$short_raw = isset( $agg['short_desc'] ) ? trim( $agg['short_desc'] ) : '';
+		$full_raw = isset( $agg['full_desc'] ) ? trim( $agg['full_desc'] ) : '';
+		$vid = isset( $agg['product_id'] ) && ! empty( $agg['variation_id'] ) ? intval( $agg['variation_id'] ) : ( isset( $agg['product_id'] ) ? intval( $agg['product_id'] ) : 0 );
+		$pid = isset( $agg['product_id'] ) ? intval( $agg['product_id'] ) : 0;
+		if ( $prod_raw === '' || $short_raw === '' || $full_raw === '' ) {
+			$prod_obj = null;
+			if ( ! empty( $agg['variation_id'] ) ) $prod_obj = wc_get_product( intval( $agg['variation_id'] ) );
+			if ( ! $prod_obj && $pid > 0 ) $prod_obj = wc_get_product( $pid );
+			if ( $prod_obj ) {
+				if ( $prod_raw === '' && method_exists( $prod_obj, 'get_name' ) ) $prod_raw = (string) $prod_obj->get_name();
+				if ( $short_raw === '' && method_exists( $prod_obj, 'get_short_description' ) ) $short_raw = (string) $prod_obj->get_short_description();
+				if ( $full_raw === '' && method_exists( $prod_obj, 'get_description' ) ) $full_raw = (string) $prod_obj->get_description();
+			}
+		}
+		$prod = esc_html( $prod_raw );
 		$variant_label = ! empty( $agg['variant_label'] ) ? esc_html( $agg['variant_label'] ) : '';
-		$short = esc_html( wp_trim_words( wp_strip_all_tags( $agg['short_desc'] ), 20, '…' ) );
-		$full  = esc_html( wp_trim_words( wp_strip_all_tags( $agg['full_desc'] ), 30, '…' ) );
+		$short = esc_html( wp_trim_words( wp_strip_all_tags( $short_raw ), 20, '…' ) );
+		$full  = esc_html( wp_trim_words( wp_strip_all_tags( $full_raw ), 30, '…' ) );
 		$qty   = intval( $agg['quantity'] );
 		$labelVal = esc_attr( $key ); // key is 'v123' or 'p123'
 

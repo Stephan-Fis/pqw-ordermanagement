@@ -141,6 +141,27 @@ function pqw_page_split_item() {
 						'quantity'      => 0,
 						'is_variant'    => true,
 					);
+					// NEW: fallback - if product_name empty, try to load variation/product name
+					if ( empty( $aggregated[ $key ]['product_name'] ) ) {
+						$prod_obj = wc_get_product( $vid );
+						if ( ! $prod_obj && isset( $r['product_id'] ) && intval( $r['product_id'] ) > 0 ) {
+							$prod_obj = wc_get_product( intval( $r['product_id'] ) );
+						}
+						if ( $prod_obj && method_exists( $prod_obj, 'get_name' ) ) {
+							$aggregated[ $key ]['product_name'] = (string) $prod_obj->get_name();
+						}
+					}
+				} else {
+					// also ensure existing entry has a name (covers earlier rows without name)
+					if ( empty( $aggregated[ $key ]['product_name'] ) ) {
+						$prod_obj = wc_get_product( $vid );
+						if ( ! $prod_obj && isset( $r['product_id'] ) && intval( $r['product_id'] ) > 0 ) {
+							$prod_obj = wc_get_product( intval( $r['product_id'] ) );
+						}
+						if ( $prod_obj && method_exists( $prod_obj, 'get_name' ) ) {
+							$aggregated[ $key ]['product_name'] = (string) $prod_obj->get_name();
+						}
+					}
 				}
 				$aggregated[ $key ]['quantity'] += isset( $r['quantity'] ) ? intval( $r['quantity'] ) : 0;
 			} else {
@@ -200,10 +221,36 @@ function pqw_page_split_item() {
 	echo '</tr></thead><tbody>';
 
 	foreach ( $aggregated as $key => $agg ) {
-		$prod  = esc_html( $agg['product_name'] );
+		// Produktname + Beschreibungen: verwende vorhandene Werte, sonst lade Produkt/Variation nach
+		$prod_raw   = isset( $agg['product_name'] ) ? trim( $agg['product_name'] ) : '';
+		$short_raw  = isset( $agg['short_desc'] ) ? trim( $agg['short_desc'] ) : '';
+		$full_raw   = isset( $agg['full_desc'] ) ? trim( $agg['full_desc'] ) : '';
+		$vid = isset( $agg['variation_id'] ) ? intval( $agg['variation_id'] ) : 0;
+		$pid = isset( $agg['product_id'] ) ? intval( $agg['product_id'] ) : 0;
+		if ( $prod_raw === '' || $short_raw === '' || $full_raw === '' ) {
+			$prod_obj = null;
+			if ( $vid > 0 ) {
+				$prod_obj = wc_get_product( $vid );
+			}
+			if ( ! $prod_obj && $pid > 0 ) {
+				$prod_obj = wc_get_product( $pid );
+			}
+			if ( $prod_obj ) {
+				if ( $prod_raw === '' && method_exists( $prod_obj, 'get_name' ) ) {
+					$prod_raw = (string) $prod_obj->get_name();
+				}
+				if ( $short_raw === '' && method_exists( $prod_obj, 'get_short_description' ) ) {
+					$short_raw = (string) $prod_obj->get_short_description();
+				}
+				if ( $full_raw === '' && method_exists( $prod_obj, 'get_description' ) ) {
+					$full_raw = (string) $prod_obj->get_description();
+				}
+			}
+		}
+		$prod          = esc_html( $prod_raw );
 		$variant_label = ! empty( $agg['variant_label'] ) ? esc_html( $agg['variant_label'] ) : '';
-		$short = esc_html( wp_trim_words( wp_strip_all_tags( $agg['short_desc'] ), 20, '…' ) );
-		$full  = esc_html( wp_trim_words( wp_strip_all_tags( $agg['full_desc'] ), 30, '…' ) );
+		$short         = esc_html( wp_trim_words( wp_strip_all_tags( $short_raw ), 20, '…' ) );
+		$full          = esc_html( wp_trim_words( wp_strip_all_tags( $full_raw ), 30, '…' ) );
 		$qty   = intval( $agg['quantity'] );
 		$labelVal = esc_attr( $key ); // 'v{vid}' or 'p{pid}'
 

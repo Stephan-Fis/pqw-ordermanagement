@@ -3,7 +3,7 @@
  * Plugin Name: PQW Order-Management
  * Plugin URI:  https://fischer-it.eu/pqw-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.8.0-251020_12
+ * Version:     1.8.1-251024_09
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: pqw-order-management
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class PQW_Order_Management {
 
-	const VERSION = '1.8.0-251020_12';
+	const VERSION = '1.8.1-251024_09';
 	const PLUGIN_SLUG = 'pqw-order-management';
 
 	// Store main menu hook suffix
@@ -489,16 +489,30 @@ class PQW_Order_Management {
 					$first_row = false;
 				}
 
-				// Article: show name and variant label (if any)
-				echo '<td data-label="Article">' . esc_html( $row['product_name'] ) . '</td>';
+				// Article name + descriptions with fallback to product/variation
+				$prod_raw  = isset( $row['product_name'] ) ? trim( $row['product_name'] ) : '';
+				$short_raw = isset( $row['short_desc'] ) ? trim( $row['short_desc'] ) : '';
+				$full_raw  = isset( $row['full_desc'] ) ? trim( $row['full_desc'] ) : '';
+				$vid = isset( $row['variation_id'] ) ? intval( $row['variation_id'] ) : 0;
+				$pid = isset( $row['product_id'] ) ? intval( $row['product_id'] ) : 0;
+				if ( $prod_raw === '' || $short_raw === '' || $full_raw === '' ) {
+					$prod_obj = null;
+					if ( $vid > 0 ) $prod_obj = wc_get_product( $vid );
+					if ( ! $prod_obj && $pid > 0 ) $prod_obj = wc_get_product( $pid );
+					if ( $prod_obj ) {
+						if ( $prod_raw === '' && method_exists( $prod_obj, 'get_name' ) ) $prod_raw = (string) $prod_obj->get_name();
+						if ( $short_raw === '' && method_exists( $prod_obj, 'get_short_description' ) ) $short_raw = (string) $prod_obj->get_short_description();
+						if ( $full_raw === '' && method_exists( $prod_obj, 'get_description' ) ) $full_raw = (string) $prod_obj->get_description();
+					}
+				}
+				echo '<td data-label="Article">' . esc_html( $prod_raw ) . '</td>';
 				// VariantenID
-				echo '<td data-label="VariantenID">' . ( isset( $row['variation_id'] ) ? intval( $row['variation_id'] ) : '' ) . '</td>';
+				echo '<td data-label="VariantenID">' . ( $vid > 0 ? intval( $vid ) : '' ) . '</td>';
 				// Variantenlabel
 				echo '<td data-label="Variantenlabel">' . ( ! empty( $row['variant_label'] ) ? '<div class="pqw-small">' . esc_html( $row['variant_label'] ) . '</div>' : '' ) . '</td>';
-				// Short description
-				echo '<td data-label="Short description">' . esc_html( wp_trim_words( wp_strip_all_tags( $row['short_desc'] ), 20, '…' ) ) . '</td>';
-				// Full description
-				echo '<td data-label="Description">' . esc_html( wp_trim_words( wp_strip_all_tags( $row['full_desc'] ), 30, '…' ) ) . '</td>';
+				// Short / Full description
+				echo '<td data-label="Short description">' . esc_html( wp_trim_words( wp_strip_all_tags( $short_raw ), 20, '…' ) ) . '</td>';
+				echo '<td data-label="Description">' . esc_html( wp_trim_words( wp_strip_all_tags( $full_raw ), 30, '…' ) ) . '</td>';
 				// Amount
 				echo '<td data-label="Amount">' . intval( $row['quantity'] ) . '</td>';
 				// Price

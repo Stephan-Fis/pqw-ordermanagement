@@ -3,7 +3,7 @@
  * Plugin Name: PQW Order-Management
  * Plugin URI:  https://fischer-it.eu/pqw-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.8.2-251024_17
+ * Version:     1.9.0-251024_11
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: pqw-order-management
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class PQW_Order_Management {
 
-	const VERSION = '1.8.2-251024_17';
+	const VERSION = '1.9.0-251024_11';
 	const PLUGIN_SLUG = 'pqw-order-management';
 
 	// Store main menu hook suffix

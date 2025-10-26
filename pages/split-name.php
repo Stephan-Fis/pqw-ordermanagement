@@ -181,6 +181,7 @@ function pqw_page_split_name() {
 	echo '<thead class="table-dark"><tr>';
 	echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Person</th>';
+	echo '<th scope="col">E-Mail</th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
 	echo '<th scope="col">Beschreibung</th>';
@@ -237,7 +238,10 @@ function pqw_page_split_name() {
 
 			if ( $first ) {
 				$person_html = '<div class="pqw-customer-name">' . esc_html( $display_name ) . '</div>';
+				$email_val = isset( $c['email'] ) ? $c['email'] : '';
+				$email_html = '<div class="pqw-customer-email">' . esc_html( $email_val ) . '</div>';
 				echo '<td rowspan="' . esc_attr( $rows_count ) . '" data-label="Person">' . $person_html . '</td>';
+				echo '<td rowspan="' . esc_attr( $rows_count ) . '" data-label="E-Mail">' . $email_html . '</td>';
 				$first = false;
 			}
 

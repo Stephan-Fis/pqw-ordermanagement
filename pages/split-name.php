@@ -178,6 +178,7 @@ function pqw_page_split_name() {
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
 	echo '<th scope="col">Beschreibung</th>';
+	echo '<th scope="col">Zusatzfeld</th>';
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead>';
 	echo '<tbody>';
@@ -264,6 +265,67 @@ function pqw_page_split_name() {
 			echo '<td data-label="Artikel">' . esc_html( $prod ) . '</td>';
 			echo '<td data-label="Kurzbeschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $short ), 20, '…' ) ) . '</td>';
 			echo '<td data-label="Beschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $full ), 30, '…' ) ) . '</td>';
+
+			// CUSTOM FIELDS: collect Flexible Product Fields values saved as order item meta
+			$pqw_custom_value = '';
+			$meta_map = array();
+			if ( isset( $c['rows'] ) && is_array( $c['rows'] ) ) {
+				foreach ( $c['rows'] as $rrow ) {
+					$r_vid = isset( $rrow['variation_id'] ) ? intval( $rrow['variation_id'] ) : 0;
+					$r_pid = isset( $rrow['product_id'] ) ? intval( $rrow['product_id'] ) : 0;
+					$r_oid = isset( $rrow['order_id'] ) ? intval( $rrow['order_id'] ) : 0;
+					$r_iid = isset( $rrow['order_item_id'] ) ? intval( $rrow['order_item_id'] ) : 0;
+					if ( $r_iid <= 0 || $r_oid <= 0 ) {
+						continue;
+					}
+					// match this aggregated item: variant if vid>0 else product id
+					if ( ( $it['variation_id'] > 0 && $r_vid === $it['variation_id'] ) || ( $it['variation_id'] == 0 && $r_pid === $it['product_id'] ) ) {
+						$order = wc_get_order( $r_oid );
+						if ( ! $order ) {
+							continue;
+						}
+						$item = $order->get_item( $r_iid );
+						if ( ! $item ) {
+							continue;
+						}
+						// get all meta from order item
+						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+						if ( ! empty( $meta_data ) ) {
+							foreach ( $meta_data as $md ) {
+								if ( empty( $md->key ) ) {
+									continue;
+								}
+								$mkey = $md->key;
+								// skip internal/underscore meta
+								if ( strpos( $mkey, '_' ) === 0 ) {
+									continue;
+								}
+								$mval = $item->get_meta( $mkey );
+								if ( $mval === '' || $mval === null ) {
+									continue;
+								}
+								if ( is_array( $mval ) ) {
+									$mval = implode( ', ', array_map( 'strval', $mval ) );
+								} else {
+									$mval = (string) $mval;
+								}
+								$meta_map[ $mkey ][ ] = $mval;
+							}
+						}
+					}
+				}
+			}
+			if ( ! empty( $meta_map ) ) {
+				// show only the meta keys (unique, trimmed)
+				$keys = array_keys( $meta_map );
+				$keys = array_map( 'trim', $keys );
+				$keys = array_unique( array_filter( $keys ) );
+				if ( ! empty( $keys ) ) {
+					$pqw_custom_value = implode( ', ', $keys );
+				}
+			}
+			$pqw_custom_value = trim( (string) $pqw_custom_value );
+			echo '<td data-label="Zusatzfeld">' . esc_html( wp_trim_words( wp_strip_all_tags( $pqw_custom_value ), 20, '…' ) ) . '</td>';
 			echo '<td data-label="Gesamtmenge">' . intval( $it['quantity'] ) . '</td>';
 			echo '</tr>';
 		}

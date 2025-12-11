@@ -217,6 +217,7 @@ function pqw_page_split_item() {
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Beschreibung</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
+	echo '<th scope="col">Zusatzfeld</th>';
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead><tbody>';
 
@@ -259,6 +260,70 @@ function pqw_page_split_item() {
 		echo '<td data-label="Artikel">' . $prod . '</td>';
 		echo '<td data-label="Beschreibung">' . $full . '</td>';
 		echo '<td data-label="Kurzbeschreibung">' . $short . '</td>';
+
+		// CUSTOM FIELDS: collect Flexible Product Fields values saved as order item meta
+		$pqw_custom_value = '';
+		$meta_map = array();
+		if ( ! empty( $customers ) && is_array( $customers ) ) {
+			foreach ( $customers as $cust_data ) {
+				if ( empty( $cust_data['rows'] ) || ! is_array( $cust_data['rows'] ) ) {
+					continue;
+				}
+				foreach ( $cust_data['rows'] as $rrow ) {
+					$r_vid = isset( $rrow['variation_id'] ) ? intval( $rrow['variation_id'] ) : 0;
+					$r_pid = isset( $rrow['product_id'] ) ? intval( $rrow['product_id'] ) : 0;
+					$r_oid = isset( $rrow['order_id'] ) ? intval( $rrow['order_id'] ) : 0;
+					$r_iid = isset( $rrow['order_item_id'] ) ? intval( $rrow['order_item_id'] ) : 0;
+					if ( $r_iid <= 0 || $r_oid <= 0 ) {
+						continue;
+					}
+					// match aggregated item: variant-key (vid>0) or product id
+					if ( ( $vid > 0 && $r_vid === $vid ) || ( $vid == 0 && $r_pid === $pid ) ) {
+						$order = wc_get_order( $r_oid );
+						if ( ! $order ) {
+							continue;
+						}
+						$item = $order->get_item( $r_iid );
+						if ( ! $item ) {
+							continue;
+						}
+						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+						if ( ! empty( $meta_data ) ) {
+							foreach ( $meta_data as $md ) {
+								if ( empty( $md->key ) ) {
+									continue;
+								}
+								$mkey = $md->key;
+								if ( strpos( $mkey, '_' ) === 0 ) {
+									continue;
+								}
+								$mval = $item->get_meta( $mkey );
+								if ( $mval === '' || $mval === null ) {
+									continue;
+								}
+								if ( is_array( $mval ) ) {
+									$mval = implode( ', ', array_map( 'strval', $mval ) );
+								} else {
+									$mval = (string) $mval;
+								}
+								$meta_map[ $mkey ][] = $mval;
+							}
+						}
+					}
+				}
+			}
+		}
+		if ( ! empty( $meta_map ) ) {
+			// show only the meta keys (unique, trimmed)
+			$keys = array_keys( $meta_map );
+			$keys = array_map( 'trim', $keys );
+			$keys = array_unique( array_filter( $keys ) );
+			if ( ! empty( $keys ) ) {
+				$pqw_custom_value = implode( ', ', $keys );
+			}
+		}
+		$pqw_custom_value = trim( (string) $pqw_custom_value );
+		echo '<td data-label="Zusatzfeld">' . esc_html( wp_trim_words( wp_strip_all_tags( $pqw_custom_value ), 12, '…' ) ) . '</td>';
 		echo '<td data-label="Gesamtmenge">' . $qty . '</td>';
 		echo '</tr>';
 	}

@@ -3,7 +3,7 @@
  * Plugin Name: PQW Order-Management
  * Plugin URI:  https://fischer-it.eu/pqw-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.8.1-251024_09
+ * Version:     1.999.1-251024_09
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: pqw-order-management
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class PQW_Order_Management {
 
-	const VERSION = '1.8.1-251024_09';
+	const VERSION = '1.999.1-251024_09';
 	const PLUGIN_SLUG = 'pqw-order-management';
 
 	// Store main menu hook suffix
@@ -36,11 +36,15 @@ class PQW_Order_Management {
 			require_once $base . 'split-item.php';
 			require_once $base . 'complete-name.php';
 			require_once $base . 'complete-item.php';
+			require_once $base . 'current-jobs.php';
 		}
 
 		// AJAX endpoints for status polling and async processor trigger
 		add_action( 'wp_ajax_pqw_queue_status', array( $this, 'ajax_queue_status' ) );
 		add_action( 'wp_ajax_pqw_process_queue_async', array( $this, 'ajax_process_queue_async' ) );
+
+		// AJAX: process selected jobs (split or complete)
+		add_action( 'wp_ajax_pqw_process_selected_jobs', array( $this, 'ajax_process_selected_jobs' ) );
 
 		// AJAX endpoints for completion queue
 		add_action( 'wp_ajax_pqw_complete_queue_status', array( $this, 'ajax_complete_queue_status' ) );
@@ -111,8 +115,8 @@ class PQW_Order_Management {
 
 		// add_menu_page returns the $hook_suffix for the page (landing/overview)
 		$this->menu_hook = add_menu_page(
-			'PQW Order-Management',
-			'PQW Orders',
+			'Order-Management',
+			'Orders',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG,
 			array( $this, 'render_admin_page' ), // landing page
@@ -156,6 +160,15 @@ class PQW_Order_Management {
 			self::PLUGIN_SLUG . '_complete_item',
 			'pqw_page_complete_item'
 		);
+
+		add_submenu_page(
+			self::PLUGIN_SLUG,
+			'Offene Jobs',
+			'Offene Jobs',
+			'manage_woocommerce',
+			self::PLUGIN_SLUG . '_current_jobs',
+			'pqw_page_current_jobs'
+		);
 	}
 
 	/**
@@ -163,13 +176,14 @@ class PQW_Order_Management {
 	 */
 	public function render_admin_page() {
 		echo '<div class="wrap">';
-		echo '<h1>PQW Order-Management</h1>';
+		echo '<h1>Order-Management</h1>';
 		echo '<p>Wählen Sie eine Aktion aus dem Menü links:</p>';
 		echo '<ul>';
 		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_split_name' ) ) . '">Bestellung weiterverarbeiten - Name</a></li>';
 		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_split_item' ) ) . '">Bestellung weiterverarbeiten - Artikel</a></li>';
 		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_complete_name' ) ) . '">Bestellung abschließen - Name</a></li>';
 		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_complete_item' ) ) . '">Bestellung abschließen - Artikel</a></li>';
+		echo '<li><a href="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_current_jobs' ) ) . '">Offene Jobs</a></li>';
 		echo '</ul>';
 		echo '<h6>Version ' . esc_html( self::VERSION ) . '</h6>';
 		echo '</div>';
@@ -789,6 +803,118 @@ class PQW_Order_Management {
 		do_action( 'pqw_process_queue' );
 
 		wp_send_json_success( 'started' );
+	}
+
+	/**
+	 * AJAX handler: process selected queue entries (split or complete)
+	 */
+	public function ajax_process_selected_jobs() {
+		// capability + nonce
+		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
+			wp_send_json_error( 'unauthorized', 403 );
+		}
+		$nonce = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'pqw_process_selected_jobs' ) ) {
+			wp_send_json_error( 'bad_nonce', 400 );
+		}
+
+		$ids = isset( $_REQUEST['ids'] ) ? (array) wp_unslash( $_REQUEST['ids'] ) : array();
+		$ids = array_map( 'intval', $ids );
+		$queue = isset( $_REQUEST['queue'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['queue'] ) ) : '';
+
+		global $wpdb, $pqw_order_management;
+		if ( empty( $ids ) || ! in_array( $queue, array( 'split', 'complete' ), true ) ) {
+			wp_send_json_error( 'invalid', 400 );
+		}
+
+		$table = $wpdb->prefix . ( $queue === 'split' ? 'pqw_order_queue' : 'pqw_order_complete_queue' );
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($placeholders)", $ids );
+		$rows = $wpdb->get_results( $sql );
+		if ( empty( $rows ) ) {
+			wp_send_json_error( 'notfound', 404 );
+		}
+
+		$processed = 0;
+		if ( $queue === 'split' ) {
+			// group by order_id
+			$grouped = array();
+			foreach ( $rows as $r ) {
+				$oid = intval( $r->order_id );
+				if ( ! isset( $grouped[ $oid ] ) ) {
+					$grouped[ $oid ] = array();
+				}
+				$grouped[ $oid ][] = $r;
+			}
+
+			foreach ( $grouped as $order_id => $entries ) {
+				$item_ids = array();
+				foreach ( $entries as $e ) {
+					if ( ! empty( $e->order_item_id ) ) {
+						$item_ids[] = intval( $e->order_item_id );
+					}
+				}
+
+				if ( ! empty( $item_ids ) && isset( $pqw_order_management ) ) {
+					$pqw_order_management->split_order_items( $order_id, $item_ids );
+				} else {
+					// fallback: set order on-hold or cancel as in handler
+					$ord = wc_get_order( $order_id );
+					if ( $ord ) {
+						if ( 'on-hold' !== $ord->get_status() ) {
+							$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (selected)', 'pqw-order-management' ) );
+						}
+						$items = $ord->get_items();
+						if ( empty( $items ) ) {
+							if ( 'cancelled' !== $ord->get_status() ) {
+								$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'pqw-order-management' ) );
+							}
+						} else {
+							$ord_total = floatval( $ord->get_total() );
+							if ( 0.0 >= $ord_total ) {
+								if ( 'cancelled' !== $ord->get_status() ) {
+									$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'pqw-order-management' ) );
+								}
+							}
+						}
+					}
+				}
+				// mark these entries done
+				$ids_local = wp_list_pluck( $entries, 'id' );
+				if ( ! empty( $ids_local ) ) {
+					$place = implode( ',', array_fill( 0, count( $ids_local ), '%d' ) );
+					$wpdb->query( $wpdb->prepare( "UPDATE {$table} SET status = %s, processed_at = %s WHERE id IN ($place)", array_merge( array( 'done', current_time( 'mysql', 1 ) ), $ids_local ) ) );
+					$processed += count( $ids_local );
+				}
+			}
+
+		} else {
+			// complete queue: iterate rows and complete orders
+			foreach ( $rows as $r ) {
+				$ord = wc_get_order( intval( $r->order_id ) );
+				if ( $ord ) {
+					$items = $ord->get_items();
+					$ord_total = floatval( $ord->get_total() );
+					if ( empty( $items ) ) {
+						if ( 'cancelled' !== $ord->get_status() ) {
+							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'pqw-order-management' ) );
+						}
+					} elseif ( 0.0 >= $ord_total ) {
+						if ( 'cancelled' !== $ord->get_status() ) {
+							$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'pqw-order-management' ) );
+						}
+					} else {
+						if ( 'completed' !== $ord->get_status() ) {
+							$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (selected)', 'pqw-order-management' ) );
+						}
+					}
+				}
+				$wpdb->update( $table, array( 'status' => 'done', 'processed_at' => current_time( 'mysql', 1 ) ), array( 'id' => intval( $r->id ) ), array( '%s', '%s' ), array( '%d' ) );
+				$processed++;
+			}
+		}
+
+		wp_send_json_success( array( 'processed' => $processed ) );
 	}
 
 	/**

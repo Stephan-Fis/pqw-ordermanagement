@@ -280,6 +280,7 @@ function pqw_page_complete_name() {
 	echo '<thead class="table-dark"><tr>';
 	echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Name</th>';
+	echo '<th scope="col">E-Mail</th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Menge</th>';
 	echo '<th scope="col">Preis</th>';
@@ -310,8 +311,11 @@ function pqw_page_complete_name() {
 		foreach ( $rows as $row ) {
 			echo '<tr>';
 			if ( $first_row ) {
+				// checkbox + Name + E-Mail with rowspan
 				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
 				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '">' . esc_html( $display_name ) . '</td>';
+				$email_val = isset( $cust_data['email'] ) ? $cust_data['email'] : '';
+				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '" data-label="E-Mail">' . esc_html( $email_val ) . '</td>';
 				$first_row = false;
 			}
 			// Artikel-Name

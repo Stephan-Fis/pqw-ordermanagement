@@ -72,6 +72,8 @@ function pqw_page_complete_name() {
 	// Nicht-Varianten bleiben einzelne Zeilen (pro order_item), so wie bei split.
 	if ( ! empty( $customers ) ) {
 		foreach ( $customers as $k => &$c ) {
+			// preserve original rows for per-order-item meta extraction (used for Optionen)
+			$c['orig_rows'] = isset( $c['rows'] ) ? $c['rows'] : array();
 			$agg = array();
 			if ( ! empty( $c['rows' ] ) ) {
 				foreach ( $c['rows' ] as $r ) {
@@ -99,19 +101,21 @@ function pqw_page_complete_name() {
 						$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 
 					} else {
-						// Keine Variante: behalte einzelne Zeile pro order_item (kein globales Zusammenfassen)
-						$key = 'p' . $pid . '_o' . intval( $r['order_id'] ) . '_i' . intval( $r['order_item_id'] );
+						// Keine Variante: jetzt nach Produkt-ID zusammenfassen (mehrere gleiche Artikel -> eine Artikelzeile, Optionen in mehreren Zeilen)
+						$key = 'p' . $pid;
 						if ( ! isset( $agg[ $key ] ) ) {
 							$agg[ $key ] = array(
 								'product_id'    => $pid,
 								'product_name'  => isset( $r['product_name'] ) ? $r['product_name'] : '',
 								'variation_id'  => 0,
 								'variant_label' => '',
-								'quantity'      => intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 ),
-								'line_total'    => floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 ),
+								'quantity'      => 0,
+								'line_total'    => 0.0,
 								'is_variant'    => false,
 							);
 						}
+						$agg[ $key ]['quantity']  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
+						$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 					}
 				}
 			}
@@ -205,55 +209,73 @@ function pqw_page_complete_name() {
 			}
 
 			function exportSelected(){
-				var checked = document.querySelectorAll('input[name="customers[]"]:checked');
-				if (!checked || checked.length === 0) {
+				// collect checked customer keys
+				var checkedBoxes = document.querySelectorAll('input[name="customers[]"]:checked');
+				if (!checkedBoxes || checkedBoxes.length === 0) {
 					alert('Bitte mindestens eine Person auswählen zum Export.');
 					return;
 				}
-				var out = [];
-				for (var i=0;i<checked.length;i++){
-					var key = checked[i].value;
-					var c = pqw_export_customers[key];
-					if (!c) continue;
-					// Anzeige "Nachname, Vorname" (Fallback: Vorname, E-Mail, 'Gast')
-					var ln = (c.last_name||'').trim();
-					var fn = (c.first_name||'').trim();
-					var display = '';
-					if (ln) {
-						display = fn ? ln + ', ' + fn : ln;
-					} else {
-						display = fn || c.email || 'Gast';
-					}
-					// berechne Gesamt (falls noch nicht vorhanden im Objekt)
-					var custTotal = parseFloat(c.total || 0);
-					if (c.rows && c.rows.length) {
-						for (var j=0;j<c.rows.length;j++){
-							var r = c.rows[j];
-							var qty = parseInt(r.quantity || 0, 10) || 0;
-							var lineTotal = parseFloat(r.line_total || 0);
-							// Stückpreis berechnen (falls Menge > 0)
-							var unitPrice = qty ? (lineTotal / qty) : lineTotal;
-							// erste Zeile: Person + Gesamtpreis, sonst leere Felder
-							out.push({
-								'Person': (j === 0) ? display : '',
-								'Artikel': r.product_name || '',
-								'Menge': qty,
-								'Preis': formatPrice(unitPrice),
-								'Gesamtpreis': (j === 0) ? formatPrice(custTotal) : ''
-							});
+				var checkedKeys = {};
+				for (var i=0;i<checkedBoxes.length;i++){ checkedKeys[ checkedBoxes[i].value ] = true; }
+
+				var table = document.querySelector('.pqw-orders-table table');
+				if (!table) { alert('Keine Tabelle gefunden'); return; }
+
+				// build a minimal table clone that only contains rows for checked customers
+				var thead = table.querySelector('thead');
+				var tbody = table.querySelector('tbody');
+				var tmpTable = document.createElement('table');
+				tmpTable.className = table.className;
+				if (thead) tmpTable.appendChild(thead.cloneNode(true));
+				var tmpTbody = document.createElement('tbody');
+
+				var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+				for (var r = 0; r < rows.length; r++) {
+					var row = rows[r];
+					var cb = row.querySelector('input.pqw-customer-checkbox');
+					if (cb) {
+						// this is the first row for a customer
+						var key = cb.value;
+						if ( checkedKeys[key] ) {
+							// include this row and all following rows until next customer row
+							tmpTbody.appendChild(row.cloneNode(true));
+							var s = r+1;
+							while (s < rows.length && !rows[s].querySelector('input.pqw-customer-checkbox')) {
+								tmpTbody.appendChild(rows[s].cloneNode(true));
+								s++;
+							}
+							r = s-1; // skip processed rows
+						} else {
+							// skip this customer block
+							var s2 = r+1;
+							while (s2 < rows.length && !rows[s2].querySelector('input.pqw-customer-checkbox')) s2++;
+							r = s2-1;
 						}
 					}
 				}
-				if (out.length === 0) {
-					alert('Keine Daten gefunden zum Export.');
-					return;
+				tmpTable.appendChild(tmpTbody);
+
+				// replace inputs in clone with textual representation
+				var inputs = tmpTable.querySelectorAll('input,select,textarea');
+				for (var k=0;k<inputs.length;k++){
+					var el = inputs[k];
+					var text = '';
+					if (el.type === 'checkbox' || el.type === 'radio') {
+						text = el.checked ? '1' : '';
+					} else {
+						text = el.value || el.getAttribute('aria-label') || '';
+					}
+					var txtNode = document.createTextNode(text);
+					if (el.parentNode) el.parentNode.replaceChild(txtNode, el);
 				}
-				// build workbook and trigger download
-				var ws = XLSX.utils.json_to_sheet(out, {header:['Person','Artikel','Menge','Preis','Gesamtpreis']});
-				var wb = XLSX.utils.book_new();
-				XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-				var fname = 'pqw_orders_export_' + localDateStamp(new Date()) + '.xlsx';
-				XLSX.writeFile(wb, fname);
+
+				try {
+					var wb = XLSX.utils.table_to_book(tmpTable, {sheet: 'Orders'});
+					var fname = 'pqw_orders_export_' + localDateStamp(new Date()) + '.xlsx';
+					XLSX.writeFile(wb, fname);
+				} catch (e) {
+					alert('Export fehlgeschlagen');
+				}
 			}
 
 			var btn = document.getElementById('pqw_export_btn');
@@ -284,6 +306,7 @@ function pqw_page_complete_name() {
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Menge</th>';
 	echo '<th scope="col">Preis</th>';
+	echo '<th scope="col">Optionen</th>';
 	echo '<th scope="col">Gesamtpreis</th>';
 	echo '</tr></thead>';
 	echo '<tbody>';
@@ -297,39 +320,136 @@ function pqw_page_complete_name() {
 		} else {
 			$display_name = $fn !== '' ? $fn : ( $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'pqw-order-management' ) );
 		}
-		$rows = $cust_data['rows'];
-		if ( empty( $rows ) ) {
+
+		$items = isset( $cust_data['rows'] ) ? $cust_data['rows'] : array();
+		if ( empty( $items ) ) {
 			continue;
 		}
+
 		// berechne Gesamtpreis für diese Person
 		$cust_total = 0.0;
-		foreach ( $rows as $r ) {
-			$cust_total += floatval( $r['line_total'] );
+		foreach ( $items as $r ) {
+			$cust_total += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 		}
 
-		$first_row = true;
-		foreach ( $rows as $row ) {
-			echo '<tr>';
-			if ( $first_row ) {
-				// checkbox + Name + E-Mail with rowspan
-				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
-				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '">' . esc_html( $display_name ) . '</td>';
-				$email_val = isset( $cust_data['email'] ) ? $cust_data['email'] : '';
-				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '" data-label="E-Mail">' . esc_html( $email_val ) . '</td>';
-				$first_row = false;
+		// Collect per-item option/meta rows from original (pre-aggregated) rows
+		$per_item_options = array();
+		$per_item_counts = array();
+		$total_rows_for_customer = 0;
+		$orig_rows = isset( $cust_data['orig_rows'] ) ? $cust_data['orig_rows'] : array();
+
+		foreach ( $items as $ikey => $it ) {
+			$option_rows = array();
+			if ( ! empty( $orig_rows ) && is_array( $orig_rows ) ) {
+				foreach ( $orig_rows as $rrow ) {
+					$r_vid = isset( $rrow['variation_id'] ) ? intval( $rrow['variation_id'] ) : 0;
+					$r_pid = isset( $rrow['product_id'] ) ? intval( $rrow['product_id'] ) : 0;
+					$r_oid = isset( $rrow['order_id'] ) ? intval( $rrow['order_id'] ) : 0;
+					$r_iid = isset( $rrow['order_item_id'] ) ? intval( $rrow['order_item_id'] ) : 0;
+					if ( $r_iid <= 0 || $r_oid <= 0 ) {
+						continue;
+					}
+					if ( ( isset( $it['variation_id'] ) && intval( $it['variation_id'] ) > 0 && $r_vid === intval( $it['variation_id'] ) ) || ( isset( $it['variation_id'] ) && intval( $it['variation_id'] ) === 0 && $r_pid === intval( $it['product_id'] ) ) ) {
+						$order = wc_get_order( $r_oid );
+						if ( ! $order ) {
+							continue;
+						}
+						$item = $order->get_item( $r_iid );
+						if ( ! $item ) {
+							continue;
+						}
+						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+						$meta_parts = array();
+						if ( ! empty( $meta_data ) ) {
+							foreach ( $meta_data as $md ) {
+								if ( empty( $md->key ) ) {
+									continue;
+								}
+								$mkey = $md->key;
+								if ( strpos( $mkey, '_' ) === 0 ) {
+									continue;
+								}
+								$mval = $item->get_meta( $mkey );
+								if ( $mval === '' || $mval === null ) {
+									continue;
+								}
+								if ( is_array( $mval ) ) {
+									$mval = implode( ', ', array_map( 'strval', $mval ) );
+								} else {
+									$mval = (string) $mval;
+								}
+								$title = $mkey;
+								if ( false !== strpos( $mkey, '_' ) ) {
+									$parts_k = explode( '_', $mkey, 2 );
+									if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+										$title = $parts_k[1];
+									}
+								}
+								$title = str_replace( array( '-', '_' ), ' ', $title );
+								$title = ucwords( trim( $title ) );
+								$meta_parts[] = $title . ': ' . $mval;
+							}
+						}
+						if ( empty( $meta_parts ) ) {
+							$option_rows[] = '';
+						} else {
+							$option_rows[] = implode( '; ', $meta_parts );
+						}
+					}
+				}
 			}
-			// Artikel-Name
-			echo '<td data-label="Artikel">' . esc_html( $row['product_name'] ) . '</td>';
-			echo '<td>' . intval( $row['quantity'] ) . '</td>';
-			// Stückpreis berechnen (linie_total / menge)
-			$unit_price = ( intval( $row['quantity'] ) > 0 ) ? ( floatval( $row['line_total'] ) / intval( $row['quantity'] ) ) : floatval( $row['line_total'] );
-			echo '<td>' . wc_price( $unit_price ) . '</td>';
-			// Gesamtpreis nur in oberster Zeile mit rowspan
-			if ( ! isset( $printed_total_for_customer ) || $printed_total_for_customer !== $cust_key ) {
-				echo '<td rowspan="' . esc_attr( count( $rows ) ) . '">' . wc_price( $cust_total ) . '</td>';
-				$printed_total_for_customer = $cust_key;
+			if ( empty( $option_rows ) ) {
+				$option_rows[] = '';
 			}
-			echo '</tr>';
+			$per_item_options[ $ikey ] = $option_rows;
+			$per_item_counts[ $ikey ] = count( $option_rows );
+			$total_rows_for_customer += $per_item_counts[ $ikey ];
+		}
+
+		// Render rows: customer rowspan = $total_rows_for_customer
+		$first_customer_row = true;
+		foreach ( $items as $ikey => $it ) {
+			$option_rows = isset( $per_item_options[ $ikey ] ) && is_array( $per_item_options[ $ikey ] ) ? $per_item_options[ $ikey ] : array( '' );
+			$article_rowspan = isset( $per_item_counts[ $ikey ] ) && intval( $per_item_counts[ $ikey ] ) > 0 ? intval( $per_item_counts[ $ikey ] ) : 1;
+
+			// product display + variant label
+			$prod = isset( $it['product_name'] ) ? trim( $it['product_name'] ) : '';
+			$variant_label = ! empty( $it['variant_label'] ) ? $it['variant_label'] : '';
+			$prod_display = esc_html( $prod );
+			if ( $variant_label !== '' ) {
+				$prod_display = $prod_display . ' — ' . esc_html( $variant_label );
+			}
+
+			$qty = intval( isset( $it['quantity'] ) ? $it['quantity'] : 0 );
+			$unit_price = ( $qty > 0 ) ? ( floatval( isset( $it['line_total'] ) ? $it['line_total'] : 0 ) / $qty ) : floatval( isset( $it['line_total'] ) ? $it['line_total'] : 0 );
+
+			$first_opt = true;
+			foreach ( $option_rows as $opt_text ) {
+				echo '<tr>';
+				if ( $first_customer_row ) {
+					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
+					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '">' . esc_html( $display_name ) . '</td>';
+					$email_val = isset( $cust_data['email'] ) ? $cust_data['email'] : '';
+					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="E-Mail">' . esc_html( $email_val ) . '</td>';
+					$first_customer_row = false;
+				}
+
+				if ( $first_opt ) {
+					echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Artikel">' . $prod_display . '</td>';
+					echo '<td rowspan="' . esc_attr( $article_rowspan ) . '">' . intval( $qty ) . '</td>';
+					echo '<td rowspan="' . esc_attr( $article_rowspan ) . '">' . wc_price( $unit_price ) . '</td>';
+					echo '<td data-label="Optionen">' . esc_html( wp_trim_words( wp_strip_all_tags( (string) $opt_text ), 20, '…' ) ) . '</td>';
+					if ( ! isset( $printed_total_for_customer ) || $printed_total_for_customer !== $cust_key ) {
+						echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '">' . wc_price( $cust_total ) . '</td>';
+						$printed_total_for_customer = $cust_key;
+					}
+					echo '</tr>';
+					$first_opt = false;
+				} else {
+					echo '<td data-label="optionen">' . esc_html( wp_trim_words( wp_strip_all_tags( (string) $opt_text ), 20, '…' ) ) . '</td>';
+					echo '</tr>';
+				}
+			}
 		}
 		// clear marker for next customer
 		unset( $printed_total_for_customer );

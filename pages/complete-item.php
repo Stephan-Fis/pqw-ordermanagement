@@ -87,6 +87,7 @@ function pqw_page_complete_item() {
 	);
 	$orders = wc_get_orders( $args );
 	$aggregated = array(); // product_id => [product_name, short_desc, full_desc, quantity]
+	$product_options = array(); // key => array of option strings found across orders
 	if ( $orders ) {
 		foreach ( $orders as $order ) {
 			foreach ( $order->get_items() as $item ) {
@@ -126,6 +127,36 @@ function pqw_page_complete_item() {
 					);
 				}
 				$aggregated[ $key ]['quantity'] += intval( $item->get_quantity() );
+				// collect option/meta string for this order item for aggregated product-level options
+				$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+				$meta_parts = array();
+				if ( ! empty( $meta_data ) ) {
+					foreach ( $meta_data as $md ) {
+						if ( empty( $md->key ) ) continue;
+						$mkey = $md->key;
+						if ( strpos( $mkey, '_' ) === 0 ) continue;
+						$mval = $item->get_meta( $mkey );
+						if ( $mval === '' || $mval === null ) continue;
+						if ( is_array( $mval ) ) {
+							$mval = implode( ', ', array_map( 'strval', $mval ) );
+						} else {
+							$mval = (string) $mval;
+						}
+						$title = $mkey;
+						if ( false !== strpos( $mkey, '_' ) ) {
+							$parts_k = explode( '_', $mkey, 2 );
+							if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+								$title = $parts_k[1];
+							}
+						}
+						$title = str_replace( array( '-', '_' ), ' ', $title );
+						$title = ucwords( trim( $title ) );
+						$meta_parts[] = $title . ': ' . $mval;
+					}
+				}
+				$optstr = empty( $meta_parts ) ? '' : implode( '; ', $meta_parts );
+				if ( ! isset( $product_options[ $key ] ) ) $product_options[ $key ] = array();
+				if ( $optstr !== '' ) $product_options[ $key ][] = $optstr;
 			}
 		}
 	}
@@ -194,15 +225,60 @@ function pqw_page_complete_item() {
 						'short_desc'   => $parent_short,
 						'full_desc'    => $parent_full,
 						'variant_label'=> $variant_label,
+						// store per-order-item details so export can include options per original item
+						'per_items'    => array(),
 					);
  				}
 				$product_customers[ $key ][ $customer_key ]['quantity'] += intval( $item->get_quantity() );
 				$product_customers[ $key ][ $customer_key ]['total']    += floatval( $item->get_total() );
+
+				// build option string for this specific order item
+				$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+				$meta_parts = array();
+				if ( ! empty( $meta_data ) ) {
+					foreach ( $meta_data as $md ) {
+						if ( empty( $md->key ) ) continue;
+						$mkey = $md->key;
+						if ( strpos( $mkey, '_' ) === 0 ) continue;
+						$mval = $item->get_meta( $mkey );
+						if ( $mval === '' || $mval === null ) continue;
+						if ( is_array( $mval ) ) {
+							$mval = implode( ', ', array_map( 'strval', $mval ) );
+						} else {
+							$mval = (string) $mval;
+						}
+						$title = $mkey;
+						if ( false !== strpos( $mkey, '_' ) ) {
+							$parts_k = explode( '_', $mkey, 2 );
+							if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+								$title = $parts_k[1];
+							}
+						}
+						$title = str_replace( array( '-', '_' ), ' ', $title );
+						$title = ucwords( trim( $title ) );
+						$meta_parts[] = $title . ': ' . $mval;
+					}
+				}
+				$optstr = empty( $meta_parts ) ? '' : implode( '; ', $meta_parts );
+				// push per-item entry so client export can create one row per original item (with options)
+				$product_customers[ $key ][ $customer_key ]['per_items'][] = array(
+					'qty'   => intval( $item->get_quantity() ),
+					'total' => floatval( $item->get_total() ),
+					'option'=> $optstr,
+				);
 			}
 		}
 	}
 
 	// expose aggregated products and per-product-per-customer dataset for client-side export and load SheetJS
+	// attach aggregated product-level options (unique)
+	if ( ! empty( $aggregated ) ) {
+		foreach ( $aggregated as $k => &$a ) {
+			$opts = isset( $product_options[ $k ] ) ? array_values( array_unique( $product_options[ $k ] ) ) : array();
+			$a['options'] = $opts;
+		}
+		unset( $a );
+	}
 	?>
 	<script type="text/javascript">
 		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\pqw-order-management\pages\complete-item.php */
@@ -247,18 +323,35 @@ function pqw_page_complete_item() {
 					if (!p) continue;
 					var title = (p.product_name || '');
 					if (p.variant_label) title = title + ' — ' + p.variant_label;
-					rows.push({
-						'Artikel': title,
-						'Beschreibung': (p.full_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
-						'Kurzbeschreibung': (p.short_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
-						'Gesamtmenge': parseInt(p.quantity || 0, 10)
-					});
+
+					// If we have per-customer/order-item details, output one row per ordered item including its options
+					var map = pqw_export_product_orders[key];
+					if (map) {
+						for (var cust in map) {
+							if (!map.hasOwnProperty(cust)) continue;
+							var entry = map[cust];
+							var perItems = entry.per_items && Array.isArray(entry.per_items) ? entry.per_items : null;
+							if (perItems && perItems.length) {
+								for (var pi = 0; pi < perItems.length; pi++) {
+									var it = perItems[pi];
+									rows.push({
+										'Artikel': title,
+										'Beschreibung': (p.full_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
+										'Kurzbeschreibung': (p.short_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
+										'Optionen': it.option || '',
+										'Gesamtmenge': parseInt(it.qty || 0, 10)
+									});
+								}
+								continue;
+							}
+						}
+					}
 				}
 				if (rows.length === 0) {
 					alert('Keine Daten zum Export gefunden.');
 					return;
 				}
-				var ws = XLSX.utils.json_to_sheet(rows, {header:['Artikel','Beschreibung','Kurzbeschreibung','Gesamtmenge']});
+				var ws = XLSX.utils.json_to_sheet(rows, {header:['Artikel','Beschreibung','Kurzbeschreibung','Optionen','Gesamtmenge']});
 				var wb = XLSX.utils.book_new();
 				XLSX.utils.book_append_sheet(wb, ws, 'Products');
 				var fname = 'orders_export_article_' + localDateStamp(new Date()) + '.xlsx';
@@ -281,10 +374,8 @@ function pqw_page_complete_item() {
 					for (var custKey in map) {
 						if (!map.hasOwnProperty(custKey)) continue;
 						var entry = map[custKey];
-						var qty = parseInt(entry.quantity || 0, 10) || 0;
-						var total = parseFloat(entry.total || 0) || 0;
-						var unitPrice = qty ? (total / qty) : total;
-						// ensure person record (store first/last for sorting)
+						// If per_items present, use them (one row per original item including options)
+						var perItems = entry.per_items && Array.isArray(entry.per_items) ? entry.per_items : null;
 						if (!persons[custKey]) {
 							// build person display name as "Nachname, Vorname" with fallbacks
 							var _ln = (entry.last_name || '').trim();
@@ -312,16 +403,37 @@ function pqw_page_complete_item() {
 								lastName: entry.last_name || ''
 							};
 						}
-						// include variant label in exported product name (if present)
 						var title = (entry.product_name || '');
 						if (entry.variant_label) title = title + ' — ' + entry.variant_label;
-						persons[custKey].rows.push({
-							product_name: title,
-							qty: qty,
-							unitPrice: unitPrice,
-							total: total
-						});
-						persons[custKey].total += total;
+						if (perItems) {
+							for (var pi = 0; pi < perItems.length; pi++) {
+								var it = perItems[pi];
+								var pqty = parseInt(it.qty || 0, 10) || 0;
+								var ptotal = parseFloat(it.total || 0) || 0;
+								var punit = pqty ? (ptotal / pqty) : ptotal;
+								var popt = it.option || '';
+								persons[custKey].rows.push({
+									product_name: title,
+									qty: pqty,
+									unitPrice: punit,
+									total: ptotal,
+									options: popt
+								});
+								persons[custKey].total += ptotal;
+							}
+						} else {
+							var qty = parseInt(entry.quantity || 0, 10) || 0;
+							var total = parseFloat(entry.total || 0) || 0;
+							var unitPrice = qty ? (total / qty) : total;
+							persons[custKey].rows.push({
+								product_name: title,
+								qty: qty,
+								unitPrice: unitPrice,
+								total: total,
+								options: ''
+							});
+							persons[custKey].total += total;
+						}
 					}
 				}
 
@@ -365,6 +477,7 @@ function pqw_page_complete_item() {
 							'Artikel': row.product_name,
 							'Menge': row.qty,
 							'Preis': formatPrice(row.unitPrice),
+							'Optionen': row.options || '',
 							'Gesamtpreis': (r === 0) ? formatPrice(p.total) : ''
 						});
 					}
@@ -374,7 +487,7 @@ function pqw_page_complete_item() {
 					alert('Keine Daten zum Export gefunden.');
 					return;
 				}
-				var ws = XLSX.utils.json_to_sheet(out, {header:['Person','Artikel','Menge','Preis','Gesamtpreis']});
+				var ws = XLSX.utils.json_to_sheet(out, {header:['Person','Artikel','Menge','Preis','Optionen','Gesamtpreis']});
 				var wb = XLSX.utils.book_new();
 				XLSX.utils.book_append_sheet(wb, ws, 'ProductOrders');
 				var fname = 'orders_export_article_name_' + localDateStamp(new Date()) + '.xlsx';
@@ -435,6 +548,7 @@ function pqw_page_complete_item() {
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Beschreibung</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
+	echo '<th scope="col">Optionen</th>';
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead><tbody>';
 
@@ -465,13 +579,71 @@ function pqw_page_complete_item() {
 		if ( $variant_label !== '' ) {
 			$prod_display = $prod_display . ' — ' . $variant_label;
 		}
+
+		// Collect per-product option/meta rows from original orders' items
+		$option_rows = array();
+		if ( $orders ) {
+			foreach ( $orders as $order ) {
+				foreach ( $order->get_items() as $item_obj ) {
+					if ( ! is_a( $item_obj, 'WC_Order_Item_Product' ) ) continue;
+					$pid_i = intval( $item_obj->get_product_id() );
+					$vid_i = method_exists( $item_obj, 'get_variation_id' ) ? intval( $item_obj->get_variation_id() ) : 0;
+					$k_i = $vid_i > 0 ? 'v' . $vid_i : 'p' . $pid_i;
+					if ( $k_i !== $key ) continue;
+					$meta_data = method_exists( $item_obj, 'get_meta_data' ) ? $item_obj->get_meta_data() : array();
+					$meta_parts = array();
+					if ( ! empty( $meta_data ) ) {
+						foreach ( $meta_data as $md ) {
+							if ( empty( $md->key ) ) continue;
+							$mkey = $md->key;
+							if ( strpos( $mkey, '_' ) === 0 ) continue;
+							$mval = $item_obj->get_meta( $mkey );
+							if ( $mval === '' || $mval === null ) continue;
+							if ( is_array( $mval ) ) {
+								$mval = implode( ', ', array_map( 'strval', $mval ) );
+							} else {
+								$mval = (string) $mval;
+							}
+							$title = $mkey;
+							if ( false !== strpos( $mkey, '_' ) ) {
+								$parts_k = explode( '_', $mkey, 2 );
+								if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+									$title = $parts_k[1];
+								}
+							}
+							$title = str_replace( array( '-', '_' ), ' ', $title );
+							$title = ucwords( trim( $title ) );
+							$meta_parts[] = $title . ': ' . $mval;
+						}
+					}
+					if ( empty( $meta_parts ) ) {
+						$option_rows[] = '';
+					} else {
+						$option_rows[] = implode( '; ', $meta_parts );
+					}
+				}
+			}
+		}
+		if ( empty( $option_rows ) ) $option_rows[] = '';
+
+		$rowspan = max( 1, count( $option_rows ) );
+
+		// render first row with product info and first Optionen entry
 		echo '<tr>';
-		echo '<td data-label="Auswählen"><input type="checkbox" name="products[]" value="' . $labelVal . '" class="pqw-product-checkbox" /></td>';
-		echo '<td data-label="Artikel">' . esc_html( $prod_display ) . '</td>';
-		echo '<td data-label="Beschreibung">' . $full . '</td>';
-		echo '<td data-label="Kurzbeschreibung">' . $short . '</td>';
-		echo '<td data-label="Gesamtmenge">' . $qty . '</td>';
+		echo '<td data-label="Auswählen" rowspan="' . esc_attr( $rowspan ) . '"><input type="checkbox" name="products[]" value="' . $labelVal . '" class="pqw-product-checkbox" /></td>';
+		echo '<td data-label="Artikel" rowspan="' . esc_attr( $rowspan ) . '">' . esc_html( $prod_display ) . '</td>';
+		echo '<td data-label="Beschreibung" rowspan="' . esc_attr( $rowspan ) . '">' . $full . '</td>';
+		echo '<td data-label="Kurzbeschreibung" rowspan="' . esc_attr( $rowspan ) . '">' . $short . '</td>';
+		echo '<td data-label="Optionen">' . esc_html( wp_trim_words( wp_strip_all_tags( (string) $option_rows[0] ), 20, '…' ) ) . '</td>';
+		echo '<td data-label="Gesamtmenge" rowspan="' . esc_attr( $rowspan ) . '">' . $qty . '</td>';
 		echo '</tr>';
+
+		// additional option rows (if any)
+		for ( $oi = 1; $oi < count( $option_rows ); $oi++ ) {
+			echo '<tr>';
+			echo '<td data-label="Optionen">' . esc_html( wp_trim_words( wp_strip_all_tags( (string) $option_rows[ $oi ] ), 20, '…' ) ) . '</td>';
+			echo '</tr>';
+		}
 	}
 
 	echo '</tbody></table></div></div>';

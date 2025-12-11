@@ -215,7 +215,7 @@ function pqw_page_split_item() {
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Beschreibung</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
-	echo '<th scope="col">Zusatzfeld</th>';
+	echo '<th scope="col">Optionen</th>';
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead><tbody>';
 
@@ -258,15 +258,8 @@ function pqw_page_split_item() {
 			$prod_display = $prod_display . ' — ' . $variant_label;
 		}
 
-		echo '<tr>';
-		echo '<td data-label="Auswählen"><input type="checkbox" name="items[]" value="' . $labelVal . '" class="pqw-item-checkbox" /></td>';
-		echo '<td data-label="Artikel">' . $prod_display . '</td>';
-		echo '<td data-label="Beschreibung">' . $full . '</td>';
-		echo '<td data-label="Kurzbeschreibung">' . $short . '</td>';
-
-		// CUSTOM FIELDS: collect Flexible Product Fields values saved as order item meta
-		$pqw_custom_value = '';
-		$meta_map = array();
+		// Collect option strings per original order-item so each original item can be printed on its own option-line
+		$option_rows = array();
 		if ( ! empty( $customers ) && is_array( $customers ) ) {
 			foreach ( $customers as $cust_data ) {
 				if ( empty( $cust_data['rows'] ) || ! is_array( $cust_data['rows'] ) ) {
@@ -280,7 +273,6 @@ function pqw_page_split_item() {
 					if ( $r_iid <= 0 || $r_oid <= 0 ) {
 						continue;
 					}
-					// match aggregated item: variant-key (vid>0) or product id
 					if ( ( $vid > 0 && $r_vid === $vid ) || ( $vid == 0 && $r_pid === $pid ) ) {
 						$order = wc_get_order( $r_oid );
 						if ( ! $order ) {
@@ -291,6 +283,7 @@ function pqw_page_split_item() {
 							continue;
 						}
 						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+						$meta_parts = array();
 						if ( ! empty( $meta_data ) ) {
 							foreach ( $meta_data as $md ) {
 								if ( empty( $md->key ) ) {
@@ -309,26 +302,53 @@ function pqw_page_split_item() {
 								} else {
 									$mval = (string) $mval;
 								}
-								$meta_map[ $mkey ][] = $mval;
+								$title = $mkey;
+								if ( false !== strpos( $mkey, '_' ) ) {
+									$parts_k = explode( '_', $mkey, 2 );
+									if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+										$title = $parts_k[1];
+									}
+								}
+								$title = str_replace( array( '-', '_' ), ' ', $title );
+								$title = trim( $title );
+								$title = ucwords( $title );
+								$meta_parts[] = $title . ': ' . $mval;
 							}
+						}
+						if ( empty( $meta_parts ) ) {
+							$option_rows[] = '';
+						} else {
+							$option_rows[] = implode( '; ', $meta_parts );
 						}
 					}
 				}
 			}
 		}
-		if ( ! empty( $meta_map ) ) {
-			// show only the meta keys (unique, trimmed)
-			$keys = array_keys( $meta_map );
-			$keys = array_map( 'trim', $keys );
-			$keys = array_unique( array_filter( $keys ) );
-			if ( ! empty( $keys ) ) {
-				$pqw_custom_value = implode( ', ', $keys );
+		if ( empty( $option_rows ) ) {
+			$option_rows[] = '';
+		}
+
+		$article_rowspan = count( $option_rows ) ? count( $option_rows ) : 1;
+		echo '<tr>';
+		echo '<td data-label="Auswählen"><input type="checkbox" name="items[]" value="' . $labelVal . '" class="pqw-item-checkbox" /></td>';
+		echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Artikel">' . $prod_display . '</td>';
+		echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Beschreibung">' . $full . '</td>';
+		echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Kurzbeschreibung">' . $short . '</td>';
+
+		$first_opt = true;
+		foreach ( $option_rows as $opt_text ) {
+			if ( ! $first_opt ) {
+				echo '<tr><td data-label="Auswählen"></td>';
+			}
+			echo '<td data-label="optionen">' . esc_html( wp_trim_words( wp_strip_all_tags( (string) $opt_text ), 12, '…' ) ) . '</td>';
+			if ( $first_opt ) {
+				echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Gesamtmenge">' . $qty . '</td>';
+				echo '</tr>';
+				$first_opt = false;
+			} else {
+				echo '</tr>';
 			}
 		}
-		$pqw_custom_value = trim( (string) $pqw_custom_value );
-		echo '<td data-label="Zusatzfeld">' . esc_html( wp_trim_words( wp_strip_all_tags( $pqw_custom_value ), 12, '…' ) ) . '</td>';
-		echo '<td data-label="Gesamtmenge">' . $qty . '</td>';
-		echo '</tr>';
 	}
 
 	echo '</tbody></table></div></div>';

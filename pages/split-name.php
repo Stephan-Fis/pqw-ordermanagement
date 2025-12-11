@@ -185,7 +185,7 @@ function pqw_page_split_name() {
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
 	echo '<th scope="col">Beschreibung</th>';
-	echo '<th scope="col">Zusatzfeld</th>';
+	echo '<th scope="col">Optionen</th>';
 	echo '<th scope="col">Gesamtmenge</th>';
 	echo '</tr></thead>';
 	echo '<tbody>';
@@ -194,13 +194,13 @@ function pqw_page_split_name() {
 		$c = $data['customer'];
 		// NEW: show "Nachname, Vorname" serverseitig and fallback to email/guest
 		$last = isset( $c['last_name'] ) ? trim( $c['last_name'] ) : '';
-		$first = isset( $c['first_name'] ) ? trim( $c['first_name'] ) : '';
-		if ( $last && $first ) {
-			$display_name = $last . ', ' . $first;
+		$first_name = isset( $c['first_name'] ) ? trim( $c['first_name'] ) : '';
+		if ( $last && $first_name ) {
+			$display_name = $last . ', ' . $first_name;
 		} elseif ( $last ) {
 			$display_name = $last;
-		} elseif ( $first ) {
-			$display_name = $first;
+		} elseif ( $first_name ) {
+			$display_name = $first_name;
 		} else {
 			$display_name = $c['email'] ? $c['email'] : __( 'Gast', 'pqw-order-management' );
 		}
@@ -208,9 +208,86 @@ function pqw_page_split_name() {
 		if ( empty( $items ) ) {
 			continue;
 		}
-		$rows_count = count( $items );
-		$first = true;
-		foreach ( $items as $it ) {
+
+		// For each aggregated item, collect option-strings per original order-item
+		$per_item_options = array();
+		$per_item_counts = array();
+		$total_rows_for_customer = 0;
+		foreach ( $items as $ikey => $it ) {
+			$option_rows = array();
+			// iterate original rows for this customer and collect meta per order-item
+			if ( isset( $c['rows'] ) && is_array( $c['rows'] ) ) {
+				foreach ( $c['rows'] as $rrow ) {
+					$r_vid = isset( $rrow['variation_id'] ) ? intval( $rrow['variation_id'] ) : 0;
+					$r_pid = isset( $rrow['product_id'] ) ? intval( $rrow['product_id'] ) : 0;
+					$r_oid = isset( $rrow['order_id'] ) ? intval( $rrow['order_id'] ) : 0;
+					$r_iid = isset( $rrow['order_item_id'] ) ? intval( $rrow['order_item_id'] ) : 0;
+					if ( $r_iid <= 0 || $r_oid <= 0 ) {
+						continue;
+					}
+					// match this aggregated item: variant if variation_id >0 else product id
+					if ( ( isset( $it['variation_id'] ) && $it['variation_id'] > 0 && $r_vid === intval( $it['variation_id'] ) ) || ( isset( $it['variation_id'] ) && intval( $it['variation_id'] ) == 0 && $r_pid === intval( $it['product_id'] ) ) ) {
+						$order = wc_get_order( $r_oid );
+						if ( ! $order ) {
+							continue;
+						}
+						$item = $order->get_item( $r_iid );
+						if ( ! $item ) {
+							continue;
+						}
+						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+						$meta_parts = array();
+						if ( ! empty( $meta_data ) ) {
+							foreach ( $meta_data as $md ) {
+								if ( empty( $md->key ) ) {
+									continue;
+								}
+								$mkey = $md->key;
+								if ( strpos( $mkey, '_' ) === 0 ) {
+									continue;
+								}
+								$mval = $item->get_meta( $mkey );
+								if ( $mval === '' || $mval === null ) {
+									continue;
+								}
+								if ( is_array( $mval ) ) {
+									$mval = implode( ', ', array_map( 'strval', $mval ) );
+								} else {
+									$mval = (string) $mval;
+								}
+								// title from key
+								$title = $mkey;
+								if ( false !== strpos( $mkey, '_' ) ) {
+									$parts_k = explode( '_', $mkey, 2 );
+									if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+										$title = $parts_k[1];
+									}
+								}
+								$title = str_replace( array( '-', '_' ), ' ', $title );
+								$title = ucwords( trim( $title ) );
+								$meta_parts[] = $title . ': ' . $mval;
+							}
+						}
+						if ( empty( $meta_parts ) ) {
+							$option_rows[] = '';
+						} else {
+							$option_rows[] = implode( '; ', $meta_parts );
+						}
+					}
+				}
+			}
+			// ensure at least one row per aggregated item (empty options show as single blank row)
+			if ( empty( $option_rows ) ) {
+				$option_rows[] = '';
+			}
+			$per_item_options[ $ikey ] = $option_rows;
+			$per_item_counts[ $ikey ] = count( $option_rows );
+			$total_rows_for_customer += $per_item_counts[ $ikey ];
+		}
+
+		// now render rows: customer rowspan = $total_rows_for_customer
+		$first_customer_row = true;
+		foreach ( $items as $ikey => $it ) {
 			// NEW: ensure short/full desc exist; fallback to product/variation lookup if empty
 			$short = isset( $it['short_desc'] ) ? trim( $it['short_desc'] ) : '';
 			$full  = isset( $it['full_desc'] ) ? trim( $it['full_desc'] ) : '';
@@ -231,19 +308,19 @@ function pqw_page_split_name() {
 
 			echo '<tr>';
 			// checkbox only on first row of customer
-			if ( $first ) {
+			if ( $first_customer_row ) {
 				echo '<td data-label="Select"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
 			} else {
 				echo '<td data-label="Select"></td>';
 			}
 
-			if ( $first ) {
+			if ( $first_customer_row ) {
 				$person_html = '<div class="pqw-customer-name">' . esc_html( $display_name ) . '</div>';
 				$email_val = isset( $c['email'] ) ? $c['email'] : '';
 				$email_html = '<div class="pqw-customer-email">' . esc_html( $email_val ) . '</div>';
-				echo '<td rowspan="' . esc_attr( $rows_count ) . '" data-label="Person">' . $person_html . '</td>';
-				echo '<td rowspan="' . esc_attr( $rows_count ) . '" data-label="E-Mail">' . $email_html . '</td>';
-				$first = false;
+				echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="Person">' . $person_html . '</td>';
+				echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="E-Mail">' . $email_html . '</td>';
+				$first_customer_row = false;
 			}
 
 			// ensure product name + descriptions exist (fallback to variation/product)
@@ -272,72 +349,28 @@ function pqw_page_split_name() {
 				$prod_display = $prod_display . ' — ' . $variant_label;
 			}
 
-			echo '<td data-label="Artikel">' . esc_html( $prod_display ) . '</td>';
-			echo '<td data-label="Kurzbeschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $short ), 20, '…' ) ) . '</td>';
-			echo '<td data-label="Beschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $full ), 30, '…' ) ) . '</td>';
+			$article_rowspan = isset( $per_item_counts[ $ikey ] ) && intval( $per_item_counts[ $ikey ] ) > 0 ? intval( $per_item_counts[ $ikey ] ) : 1;
+			echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Artikel">' . esc_html( $prod_display ) . '</td>';
+			echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Kurzbeschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $short ), 20, '…' ) ) . '</td>';
+			echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Beschreibung">' . esc_html( wp_trim_words( wp_strip_all_tags( $full ), 30, '…' ) ) . '</td>';
 
-			// CUSTOM FIELDS: collect Flexible Product Fields values saved as order item meta
-			$pqw_custom_value = '';
-			$meta_map = array();
-			if ( isset( $c['rows'] ) && is_array( $c['rows'] ) ) {
-				foreach ( $c['rows'] as $rrow ) {
-					$r_vid = isset( $rrow['variation_id'] ) ? intval( $rrow['variation_id'] ) : 0;
-					$r_pid = isset( $rrow['product_id'] ) ? intval( $rrow['product_id'] ) : 0;
-					$r_oid = isset( $rrow['order_id'] ) ? intval( $rrow['order_id'] ) : 0;
-					$r_iid = isset( $rrow['order_item_id'] ) ? intval( $rrow['order_item_id'] ) : 0;
-					if ( $r_iid <= 0 || $r_oid <= 0 ) {
-						continue;
-					}
-					// match this aggregated item: variant if vid>0 else product id
-					if ( ( $it['variation_id'] > 0 && $r_vid === $it['variation_id'] ) || ( $it['variation_id'] == 0 && $r_pid === $it['product_id'] ) ) {
-						$order = wc_get_order( $r_oid );
-						if ( ! $order ) {
-							continue;
-						}
-						$item = $order->get_item( $r_iid );
-						if ( ! $item ) {
-							continue;
-						}
-						// get all meta from order item
-						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
-						if ( ! empty( $meta_data ) ) {
-							foreach ( $meta_data as $md ) {
-								if ( empty( $md->key ) ) {
-									continue;
-								}
-								$mkey = $md->key;
-								// skip internal/underscore meta
-								if ( strpos( $mkey, '_' ) === 0 ) {
-									continue;
-								}
-								$mval = $item->get_meta( $mkey );
-								if ( $mval === '' || $mval === null ) {
-									continue;
-								}
-								if ( is_array( $mval ) ) {
-									$mval = implode( ', ', array_map( 'strval', $mval ) );
-								} else {
-									$mval = (string) $mval;
-								}
-								$meta_map[ $mkey ][ ] = $mval;
-							}
-						}
-					}
+			$option_rows = isset( $per_item_options[ $ikey ] ) && is_array( $per_item_options[ $ikey ] ) ? $per_item_options[ $ikey ] : array( '' );
+			$first_opt = true;
+			foreach ( $option_rows as $opt_text ) {
+				// first option stays in the current row, subsequent options open new rows
+				if ( ! $first_opt ) {
+					// maintain table column alignment: add empty Select cell before option cell
+					echo '<tr><td data-label="Select"></td>';
+				}
+				echo '<td data-label="Optionen">' . esc_html( wp_trim_words( wp_strip_all_tags( (string) $opt_text ), 20, '…' ) ) . '</td>';
+				if ( $first_opt ) {
+					echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Gesamtmenge">' . intval( $it['quantity'] ) . '</td>';
+					echo '</tr>';
+					$first_opt = false;
+				} else {
+					echo '</tr>';
 				}
 			}
-			if ( ! empty( $meta_map ) ) {
-				// show only the meta keys (unique, trimmed)
-				$keys = array_keys( $meta_map );
-				$keys = array_map( 'trim', $keys );
-				$keys = array_unique( array_filter( $keys ) );
-				if ( ! empty( $keys ) ) {
-					$pqw_custom_value = implode( ', ', $keys );
-				}
-			}
-			$pqw_custom_value = trim( (string) $pqw_custom_value );
-			echo '<td data-label="Zusatzfeld">' . esc_html( wp_trim_words( wp_strip_all_tags( $pqw_custom_value ), 20, '…' ) ) . '</td>';
-			echo '<td data-label="Gesamtmenge">' . intval( $it['quantity'] ) . '</td>';
-			echo '</tr>';
 		}
 	}
 

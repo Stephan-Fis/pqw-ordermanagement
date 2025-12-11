@@ -1119,6 +1119,77 @@ class PQW_Order_Management {
 // --- Activation: create queue table ---
 register_activation_hook( __FILE__, array( 'PQW_Order_Management', 'activate' ) );
 
+// --- Dependency checks: ensure WooCommerce and PPOM are present ---
+/**
+ * Check whether required plugins are active/present.
+ * Uses class existence and fallback to is_plugin_active for reliability.
+ * @return array [ 'woocommerce' => bool, 'ppom' => bool ]
+ */
+function pqw_check_required_plugins() {
+	$res = array( 'woocommerce' => false, 'ppom' => false );
+	// fast check for WooCommerce
+	if ( class_exists( 'WooCommerce' ) ) {
+		$res['woocommerce'] = true;
+	}
+	// fast check for PPOM (class name may vary). Try common class and function names.
+	if ( class_exists( 'PPOM' ) || class_exists( 'PPOM_F' ) || function_exists( 'ppom' ) ) {
+		$res['ppom'] = true;
+	}
+
+	// fallback: use is_plugin_active to detect installed plugin files
+	if ( ! $res['woocommerce'] ) {
+		if ( ! function_exists( 'is_plugin_active' ) ) {
+			include_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		if ( is_plugin_active( 'woocommerce/woocommerce.php' ) ) {
+			$res['woocommerce'] = true;
+		}
+	}
+	if ( ! $res['ppom'] ) {
+		if ( ! function_exists( 'is_plugin_active' ) ) {
+			include_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		if ( is_plugin_active( 'ppom/ppom.php' ) ) {
+			$res['ppom'] = true;
+		}
+	}
+
+	return $res;
+}
+
+/**
+ * Activation-time check: deactivate plugin and show error if requirements missing.
+ */
+function pqw_activation_check_requirements() {
+	$req = pqw_check_required_plugins();
+	$missing = array();
+	if ( ! $req['woocommerce'] ) $missing[] = 'WooCommerce';
+	if ( ! $req['ppom'] ) $missing[] = 'PPOM for WooCommerce';
+	if ( ! empty( $missing ) ) {
+		// prevent activation
+		deactivate_plugins( plugin_basename( __FILE__ ) );
+		wp_die( sprintf( __( 'PQW Order-Management konnte nicht aktiviert werden. Fehlende Abhängigkeiten: %s. Bitte installieren/aktivieren Sie zuerst diese Plugins.', 'pqw-order-management' ), implode( ', ', $missing ) ), '', array( 'back_link' => true ) );
+	}
+}
+register_activation_hook( __FILE__, 'pqw_activation_check_requirements' );
+
+/**
+ * Admin notice if plugin active but dependencies missing. Visible to administrators.
+ */
+function pqw_admin_dependency_notice() {
+	if ( ! current_user_can( 'activate_plugins' ) ) {
+		return;
+	}
+	$req = pqw_check_required_plugins();
+	$missing = array();
+	if ( ! $req['woocommerce'] ) $missing[] = 'WooCommerce';
+	if ( ! $req['ppom'] ) $missing[] = 'PPOM for WooCommerce';
+	if ( ! empty( $missing ) ) {
+		echo '<div class="notice notice-error"><p><strong>PQW Order-Management:</strong> Diese Erweiterung benötigt: ' . esc_html( implode( ', ', $missing ) ) . '. Bitte installieren/aktivieren Sie diese Plugins.</p></div>';
+	}
+}
+add_action( 'admin_notices', 'pqw_admin_dependency_notice' );
+
 // Initialize plugin and expose instance globally for page handlers
 global $pqw_order_management;
 $pqw_order_management = new PQW_Order_Management();

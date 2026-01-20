@@ -6,14 +6,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Bestellung abschließen - Name (zeigt on-hold Bestellungen)
  */
-function pqw_page_complete_name() {
-	global $pqw_order_management;
+function om_page_complete_name() {
+	global $order_management;
 	$mode = 'complete_name';
 	$button_label = __( 'Bestellung abschließen', 'pqw-order-management' );
-	$nonce_action = 'pqw_action_' . $mode;
+	$nonce_action = 'om_action_' . $mode;
 
 	// Handle complete POST: always queue selected customers' order rows into complete queue
-	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['pqw_subpage'] ) && $_POST['pqw_subpage'] === $mode && ! isset( $_POST['pqw_export_action'] ) ) {
+	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode && ! isset( $_POST['om_export_action'] ) ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
 			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
 		}
@@ -25,14 +25,14 @@ function pqw_page_complete_name() {
 		$selected_customers = array_filter( array_unique( $selected_customers ) );
 
 		if ( empty( $selected_customers ) ) {
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_complete_queued' => 0 ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_complete_queued' => 0 ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
 
 		// Build rows for complete queue
 		// reuse centralized loader so variation_id logic is identical to split pages
-		$customers_all = method_exists( $pqw_order_management, 'get_customers_by_status' ) ? $pqw_order_management->get_customers_by_status( 'on-hold' ) : array();
+		$customers_all = method_exists( $order_management, 'get_customers_by_status' ) ? $order_management->get_customers_by_status( 'on-hold' ) : array();
 
 		$rows = array();
 		foreach ( $selected_customers as $ck ) {
@@ -44,10 +44,10 @@ function pqw_page_complete_name() {
 
 		$inserted = 0;
 		if ( ! empty( $rows ) ) {
-			$inserted = $pqw_order_management->queue_complete_rows( $rows );
+			$inserted = $order_management->queue_complete_rows( $rows );
 		}
 
-		$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_complete_queued' => $inserted ), admin_url( 'admin.php' ) );
+		$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_complete_queued' => $inserted ), admin_url( 'admin.php' ) );
 		wp_safe_redirect( $redirect );
 		exit;
 	}
@@ -66,7 +66,7 @@ function pqw_page_complete_name() {
 	}
 
 	// use central loader so complete view uses the same variation-id extraction as split
-	$customers = method_exists( $pqw_order_management, 'get_customers_by_status' ) ? $pqw_order_management->get_customers_by_status( 'on-hold' ) : array();
+	$customers = method_exists( $order_management, 'get_customers_by_status' ) ? $order_management->get_customers_by_status( 'on-hold' ) : array();
 
 	// Neuer Abschnitt: nur echte Varianten (variation_id > 0) zusammenfassen,
 	// Nicht-Varianten bleiben einzelne Zeilen (pro order_item), so wie bei split.
@@ -97,7 +97,7 @@ function pqw_page_complete_name() {
 								'is_variant'    => true,
 							);
 						}
-						$agg[ $key ]['quantity']  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
+						$agg[ $key ]['quantity' ]  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
 						$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 
 					} else {
@@ -114,7 +114,7 @@ function pqw_page_complete_name() {
 								'is_variant'    => false,
 							);
 						}
-						$agg[ $key ]['quantity']  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
+						$agg[ $key ]['quantity' ]  += intval( isset( $r['quantity'] ) ? $r['quantity'] : 0 );
 						$agg[ $key ]['line_total'] += floatval( isset( $r['line_total'] ) ? $r['line_total'] : 0 );
 					}
 				}
@@ -181,7 +181,7 @@ function pqw_page_complete_name() {
 	?>
 	<script type="text/javascript">
 		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\pqw-order-management\pages\complete-name.php */
-		var pqw_export_customers = <?php echo wp_json_encode( $customers ); ?>;
+		var om_export_customers = <?php echo wp_json_encode( $customers ); ?>;
 	</script>
 	<script src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . '../assets/xlsx.full.min.js' ); ?>"></script>
 	<script type="text/javascript">
@@ -218,7 +218,8 @@ function pqw_page_complete_name() {
 				var checkedKeys = {};
 				for (var i=0;i<checkedBoxes.length;i++){ checkedKeys[ checkedBoxes[i].value ] = true; }
 
-				var table = document.querySelector('.pqw-orders-table table');
+				// prefer new class, fallback to old pqw- class
+				var table = document.querySelector('.om-orders-table table') || document.querySelector('.pqw-orders-table table');
 				if (!table) { alert('Keine Tabelle gefunden'); return; }
 
 				// build a minimal table clone that only contains rows for checked customers
@@ -232,27 +233,28 @@ function pqw_page_complete_name() {
 				var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
 				for (var r = 0; r < rows.length; r++) {
 					var row = rows[r];
-					var cb = row.querySelector('input.pqw-customer-checkbox');
-					if (cb) {
-						// this is the first row for a customer
-						var key = cb.value;
-						if ( checkedKeys[key] ) {
-							// include this row and all following rows until next customer row
-							tmpTbody.appendChild(row.cloneNode(true));
-							var s = r+1;
-							while (s < rows.length && !rows[s].querySelector('input.pqw-customer-checkbox')) {
-								tmpTbody.appendChild(rows[s].cloneNode(true));
-								s++;
-							}
-							r = s-1; // skip processed rows
-						} else {
-							// skip this customer block
-							var s2 = r+1;
-							while (s2 < rows.length && !rows[s2].querySelector('input.pqw-customer-checkbox')) s2++;
-							r = s2-1;
-						}
-					}
-				}
+					// support both old and new checkbox class names
+					var cb = row.querySelector('input.pqw-customer-checkbox') || row.querySelector('input.om-customer-checkbox');
+ 					if (cb) {
+ 						// this is the first row for a customer
+ 						var key = cb.value;
+ 						if ( checkedKeys[key] ) {
+ 							// include this row and all following rows until next customer row
+ 							tmpTbody.appendChild(row.cloneNode(true));
+ 							var s = r+1;
+ 							while (s < rows.length && !rows[s].querySelector('input.pqw-customer-checkbox')) {
+ 								tmpTbody.appendChild(rows[s].cloneNode(true));
+ 								s++;
+ 							}
+ 							r = s-1; // skip processed rows
+ 						} else {
+ 							// skip this customer block
+ 							var s2 = r+1;
+ 							while (s2 < rows.length && !rows[s2].querySelector('input.pqw-customer-checkbox')) s2++;
+ 							r = s2-1;
+ 						}
+ 					}
+ 				}
 				tmpTable.appendChild(tmpTbody);
 
 				// replace inputs in clone with textual representation
@@ -271,36 +273,36 @@ function pqw_page_complete_name() {
 
 				try {
 					var wb = XLSX.utils.table_to_book(tmpTable, {sheet: 'Orders'});
-					var fname = 'pqw_orders_export_' + localDateStamp(new Date()) + '.xlsx';
+					var fname = 'om_orders_export_' + localDateStamp(new Date()) + '.xlsx';
 					XLSX.writeFile(wb, fname);
-				} catch (e) {
+				} catch ( e ) {
 					alert('Export fehlgeschlagen');
 				}
 			}
 
-			var btn = document.getElementById('pqw_export_btn');
+			var btn = document.getElementById('om_export_btn');
 			if (btn) btn.addEventListener('click', exportSelected);
 		});
 	</script>
 	<?php
 
 	// Form with complete + EXPORT (client-side)
-	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . PQW_Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
+	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
 	wp_nonce_field( $nonce_action );
-	echo '<input type="hidden" name="pqw_subpage" value="' . esc_attr( $mode ) . '" />';
+	echo '<input type="hidden" name="om_subpage" value="' . esc_attr( $mode ) . '" />';
 
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
 	// changed: client-side export button (no form submit)
-	echo '<button type="button" id="pqw_export_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export XLSX', 'pqw-order-management' ) . '</button>';
+	echo '<button type="button" id="om_export_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export XLSX', 'pqw-order-management' ) . '</button>';
 	echo '<span class="description">Markierte Personen: alle Bestellungen/Artikel dieser Person werden abgeschlossen.</span>';
 	echo '</p>';
 
 	// Render table with columns: Name | Artikel | Menge | Preis | Gesamtpreis
-	echo '<div class="pqw-orders-table"><div class="table-responsive">';
+	echo '<div class="om-orders-table"><div class="table-responsive">';
 	echo '<table class="table table-striped table-bordered">';
 	echo '<thead class="table-dark"><tr>';
-	echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
+	echo '<th scope="col"><input type="checkbox" id="om_select_all" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Name</th>';
 	echo '<th scope="col">E-Mail</th>';
 	echo '<th scope="col">Artikel</th>';
@@ -463,7 +465,7 @@ function pqw_page_complete_name() {
 	?>
 	<script type="text/javascript">
 		(function(){
-			var selectAll = document.getElementById('pqw_select_all');
+			var selectAll = document.getElementById('om_select_all');
 			if (selectAll) {
 				selectAll.addEventListener('change', function(){
 					var checkboxes = document.querySelectorAll('input.pqw-customer-checkbox');
@@ -477,8 +479,8 @@ function pqw_page_complete_name() {
 	<?php
 
 	// NEW: centered overlay + spinner and polling JS when pqw_complete_queued is present
-	if ( isset( $_GET['pqw_complete_queued'] ) && intval( $_GET['pqw_complete_queued'] ) > 0 ) :
-		$queued = intval( $_GET['pqw_complete_queued'] );
+	if ( isset( $_GET['om_complete_queued'] ) && intval( $_GET['om_complete_queued'] ) > 0 ) :
+		$queued = intval( $_GET['om_complete_queued'] );
 		?>
 		<script type="text/javascript">
 		(function(){
@@ -518,7 +520,7 @@ function pqw_page_complete_name() {
 			// remove pqw_complete_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
-				u.searchParams.delete('pqw_complete_queued');
+				u.searchParams.delete('om_complete_queued');
 				history.replaceState && history.replaceState(null, '', u.toString());
 			} catch (e) { /* ignore */ }
 
@@ -545,7 +547,7 @@ function pqw_page_complete_name() {
 						}
 					} catch(e){}
 				};
-				xhr.send('action=pqw_complete_queue_status');
+				xhr.send('action=om_complete_queue_status');
 			}
 			// start polling shortly
 			setTimeout(checkStatus, 800);
@@ -557,8 +559,8 @@ function pqw_page_complete_name() {
 	echo '</div>';
 
 	// Notices: show complete-queue notice if present
-	if ( isset( $_GET['pqw_complete_queued'] ) ) {
-		$cnt = absint( $_GET['pqw_complete_queued'] );
+	if ( isset( $_GET['om_complete_queued'] ) ) {
+		$cnt = absint( $_GET['om_complete_queued'] );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Complete-Queue Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
 	}
 
@@ -624,14 +626,14 @@ function pqw_page_complete_name() {
 						cb && cb(null);
 					}
 				};
-				xhr.send('action=pqw_complete_queue_status');
+				xhr.send('action=om_complete_queue_status');
 			}
 
 			function pqwTriggerCompleteProcessing(){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-				xhr.send('action=pqw_process_complete_queue_async');
+				xhr.send('action=om_process_complete_queue_async');
 			}
 
 			function pqwStartCompletePolling(){
@@ -668,7 +670,7 @@ function pqw_page_complete_name() {
 						var pending = parseInt(res.data.pending,10) || 0;
 						if (pending > 0) {
 							pqwCreateCompleteOverlay(pending);
-							pqwRemoveQueryParam('pqw_complete_queued');
+							pqwRemoveQueryParam('om_complete_queued');
 							// trigger server-side async processing once and start polling
 							pqwTriggerCompleteProcessing();
 							// small delay to let server start

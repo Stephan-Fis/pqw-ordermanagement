@@ -6,17 +6,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Bestellungen weiterverarbeiten - Name
  */
-function pqw_page_split_name() {
-	global $pqw_order_management;
+function om_page_split_name() {
+	global $order_management;
 	// reuse logic from previous render_subpage for mode 'split_name'
 	$mode = 'split_name';
 	$is_split = true;
 	$button_label = __( 'Bestellungen weiterverarbeiten', 'pqw-order-management' );
 	$target_status = 'on-hold';
-	$nonce_action = 'pqw_action_' . $mode;
+	$nonce_action = 'om_action_' . $mode;
 
 	// Handle POST
-	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['pqw_subpage'] ) && $_POST['pqw_subpage'] === $mode ) {
+	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
 			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
 		}
@@ -26,12 +26,12 @@ function pqw_page_split_name() {
 		$selected_customers = isset( $_POST['customers'] ) ? array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['customers'] ) ) : array();
 		$selected_customers = array_filter( array_unique( $selected_customers ) );
 		if ( empty( $selected_customers ) ) {
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_updated' => 0 ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
 
-		$customers = $pqw_order_management->get_processing_customers();
+		$customers = $order_management->get_processing_customers();
 
 		// ALWAYS queue entries (no immediate processing), build rows and insert into queue
 		$rows = array();
@@ -50,10 +50,10 @@ function pqw_page_split_name() {
 
 		$inserted = 0;
 		if ( ! empty( $rows ) ) {
-			$inserted = $pqw_order_management->queue_rows( $rows );
+			$inserted = $order_management->queue_rows( $rows );
 		}
 
-		$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_queued' => $inserted ), admin_url( 'admin.php' ) );
+		$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_queued' => $inserted ), admin_url( 'admin.php' ) );
 		wp_safe_redirect( $redirect );
 		exit;
 	}
@@ -81,16 +81,16 @@ function pqw_page_split_name() {
 		return;
 	}
 
-	$customers = $pqw_order_management->get_processing_customers();
+	$customers = $order_management->get_processing_customers();
 	if ( empty( $customers ) ) {
 		echo '<p>Keine "in Bearbeitung" Bestellungen gefunden.</p>';
 		echo '</div>';
 		return;
 	}
 
-	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . PQW_Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
+	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
 	wp_nonce_field( $nonce_action );
-	echo '<input type="hidden" name="pqw_subpage" value="' . esc_attr( $mode ) . '" />';
+	echo '<input type="hidden" name="om_subpage" value="' . esc_attr( $mode ) . '" />';
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
 	echo '<span class="description">Markierte Personen: alle Bestellungen/Artikel dieser Person werden getrennt/auf "wartend" gesetzt.</span>';
@@ -175,11 +175,11 @@ function pqw_page_split_name() {
 	}
 
 	// Render aggregated table: checkbox per customer, customer cell rowspan = count(aggregated items)
-	echo '<div class="pqw-orders-table">';
+	echo '<div class="om-orders-table">';
 	echo '<div class="table-responsive">';
 	echo '<table class="table table-striped table-bordered">';
 	echo '<thead class="table-dark"><tr>';
-	echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
+	echo '<th scope="col"><input type="checkbox" id="om_select_all" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Person</th>';
 	echo '<th scope="col">E-Mail</th>';
 	echo '<th scope="col">Artikel</th>';
@@ -309,7 +309,7 @@ function pqw_page_split_name() {
 			echo '<tr>';
 			// checkbox only on first row of customer
 			if ( $first_customer_row ) {
-				echo '<td data-label="Select"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
+				echo '<td data-label="Select"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="om-customer-checkbox" /></td>';
 			} else {
 				echo '<td data-label="Select"></td>';
 			}
@@ -377,7 +377,7 @@ function pqw_page_split_name() {
 	echo '</tbody>';
 	echo '</table>';
 	echo '</div>'; // .table-responsive
-	echo '</div>'; // .pqw-orders-table
+	echo '</div>'; // .om-orders-table
 
 	echo '</form>';
 
@@ -385,10 +385,10 @@ function pqw_page_split_name() {
 	?>
 	<script type="text/javascript">
 		(function(){
-			var selectAll = document.getElementById('pqw_select_all');
+			var selectAll = document.getElementById('om_select_all');
 			if (selectAll) {
 				selectAll.addEventListener('change', function(){
-					var checkboxes = document.querySelectorAll('input.pqw-customer-checkbox');
+					var checkboxes = document.querySelectorAll('input.om-customer-checkbox');
 					for (var i=0;i<checkboxes.length;i++){
 						checkboxes[i].checked = selectAll.checked;
 					}
@@ -407,7 +407,7 @@ function pqw_page_split_name() {
 
 			// Export-Funktion: klont Tabelle, ersetzt Inputs durch Text und erzeugt Download
 			function exportTableToXlsx(filename){
-				var table = document.querySelector('.pqw-orders-table table');
+				var table = document.querySelector('.om-orders-table table');
 				if (!table) { alert('Keine Tabelle gefunden'); return; }
 				var clone = table.cloneNode(true);
 				// Replace inputs with textual representation
@@ -461,7 +461,7 @@ function pqw_page_split_name() {
 
 			// Anpassung: formatiere Namensspalte in der Tabelle als "Nachname, Vorname"
 			function formatNameColumnToLastCommaFirst(){
-				var rows = document.querySelectorAll('.pqw-orders-table table tbody tr');
+				var rows = document.querySelectorAll('.om-orders-table table tbody tr');
 				if (!rows || rows.length === 0) return;
 				rows.forEach(function(tr){
 					var tds = tr.querySelectorAll('td');
@@ -511,7 +511,7 @@ function pqw_page_split_name() {
 	<!-- NEW: starte Queue-Verarbeitung beim Laden der Seite, falls noch Einträge vorhanden -->
 	<script type="text/javascript">
 		(function(){
-			function pqwCreateQueueOverlay(initial){
+			function omCreateQueueOverlay(initial){
 				if (document.getElementById('pqw_queue_overlay')) return;
 				var style = document.createElement('style');
 				style.type = 'text/css';
@@ -545,7 +545,7 @@ function pqw_page_split_name() {
 				document.body.appendChild(overlay);
 			}
 
-			function pqwRemoveQueryParam(param){
+			function omRemoveQueryParam(param){
 				try {
 					var u = new URL(window.location.href);
 					u.searchParams.delete(param);
@@ -553,7 +553,7 @@ function pqw_page_split_name() {
 				} catch (e) { /* ignore */ }
 			}
 
-			function pqwCheckQueueStatus(cb){
+			function omCheckQueueStatus(cb){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
@@ -565,19 +565,19 @@ function pqw_page_split_name() {
 						cb && cb(null);
 					}
 				};
-				xhr.send('action=pqw_queue_status');
+				xhr.send('action=om_queue_status');
 			}
 
-			function pqwTriggerQueueProcessing(){
+			function omTriggerQueueProcessing(){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
 				xhr.send('action=pqw_process_queue_async');
 			}
 
-			function pqwStartQueuePolling(){
+			function omStartQueuePolling(){
 				(function poll(){
-					pqwCheckQueueStatus(function(res){
+					omCheckQueueStatus(function(res){
 						try {
 							if (res && res.success && res.data) {
 								var pending = parseInt(res.data.pending,10) || 0;
@@ -604,16 +604,16 @@ function pqw_page_split_name() {
 			document.addEventListener('DOMContentLoaded', function(){
 				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?pqw_queued)
 				if (document.getElementById('pqw_queue_overlay')) return;
-				pqwCheckQueueStatus(function(res){
+				omCheckQueueStatus(function(res){
 					if (res && res.success && res.data) {
 						var pending = parseInt(res.data.pending,10) || 0;
 						if (pending > 0) {
-							pqwCreateQueueOverlay(pending);
-							pqwRemoveQueryParam('pqw_queued');
+							omCreateQueueOverlay(pending);
+							omRemoveQueryParam('om_queued');
 							// einmalig Verarbeitung auslösen
-							pqwTriggerQueueProcessing();
+							omTriggerQueueProcessing();
 							// kleine Verzögerung, damit Server starten kann
-							setTimeout(pqwStartQueuePolling, 700);
+							setTimeout(omStartQueuePolling, 700);
 						}
 					}
 				});
@@ -623,8 +623,8 @@ function pqw_page_split_name() {
 	<?php
 
 	// After the form output add centered overlay + spinner and polling JS when pqw_queued is present:
-	if ( isset( $_GET['pqw_queued'] ) && intval( $_GET['pqw_queued'] ) > 0 ) :
-		$queued = intval( $_GET['pqw_queued'] );
+	if ( isset( $_GET['om_queued'] ) && intval( $_GET['om_queued'] ) > 0 ) :
+		$queued = intval( $_GET['om_queued'] );
 		?>
 		<script type="text/javascript">
 		(function(){
@@ -664,7 +664,7 @@ function pqw_page_split_name() {
 			// remove pqw_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
-				u.searchParams.delete('pqw_queued');
+				u.searchParams.delete('om_queued');
 				history.replaceState && history.replaceState(null, '', u.toString());
 			} catch (e) { /* ignore */ }
 
@@ -692,7 +692,7 @@ function pqw_page_split_name() {
 						}
 					} catch(e){}
 				};
-				xhr.send('action=pqw_queue_status');
+				xhr.send('action=om_queue_status');
 			}
 			// start polling shortly
 			setTimeout(checkStatus, 800);

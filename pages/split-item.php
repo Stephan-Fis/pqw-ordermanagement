@@ -9,15 +9,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Rendert eine Artikel-basierte Ansicht (je unique Produkt eine Zeile).
  * Checkbox per Produkt: name="items[]" value="{product_id}"
  */
-function pqw_page_split_item() {
-	global $pqw_order_management;
+function om_page_split_item() {
+	global $order_management;
 
 	$mode = 'split_item';
 	$button_label = __( 'Bestellungen weiterverarbeiten (Artikel)', 'pqw-order-management' );
-	$nonce_action  = 'pqw_action_' . $mode;
+	$nonce_action  = 'om_action_' . $mode;
 
 	// Handle POST
-	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['pqw_subpage'] ) && $_POST['pqw_subpage'] === $mode ) {
+	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
 			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
 		}
@@ -35,7 +35,7 @@ function pqw_page_split_item() {
 
 		// parse items into map: order_id => array(order_item_id,...)
 		$by_order = array();
-		$customers = $pqw_order_management->get_processing_customers();
+		$customers = $order_management->get_processing_customers();
 
 		// Items may be keys like 'v123' (variant 123) or 'p123' (product 123)
 		foreach ( $customers as $cust_data ) {
@@ -45,8 +45,20 @@ function pqw_page_split_item() {
 				$prod_id  = isset( $r['product_id'] ) ? intval( $r['product_id'] ) : 0;
 				$var_id   = isset( $r['variation_id'] ) ? intval( $r['variation_id'] ) : 0;
 
-				if ( ! $order_id || ! $item_id ) {
+				// Skip row only if we have neither product nor variation id
+				if ( $prod_id === 0 && $var_id === 0 ) {
 					continue;
+				}
+
+				// If product id missing but variation id present, try to resolve parent product id from variation object
+				if ( $prod_id === 0 && $var_id > 0 ) {
+					$var_obj = wc_get_product( $var_id );
+					if ( $var_obj && method_exists( $var_obj, 'get_parent_id' ) ) {
+						$parent_id = intval( $var_obj->get_parent_id() );
+						if ( $parent_id > 0 ) {
+							$prod_id = $parent_id;
+						}
+					}
 				}
 
 				$match = false;
@@ -85,7 +97,7 @@ function pqw_page_split_item() {
 				$rows[] = array( 'order_id' => $oid, 'order_item_id' => $iid );
 			}
 		}
-		$inserted = $pqw_order_management->queue_rows( $rows );
+		$inserted = $order_management->queue_rows( $rows );
 		$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_queued' => $inserted ), admin_url( 'admin.php' ) );
 		wp_safe_redirect( $redirect );
 		exit;
@@ -117,7 +129,7 @@ function pqw_page_split_item() {
 	}
 
 	// Fetch data (customers -> rows) and aggregate by product_id
-	$customers = $pqw_order_management->get_processing_customers();
+	$customers = $order_management->get_processing_customers();
 	$aggregated = array(); // aggregated keyed: variant => combined, non-variants => unique entry per order-item
 	foreach ( $customers as $cust_data ) {
 		foreach ( $cust_data['rows'] as $r ) {
@@ -198,9 +210,9 @@ function pqw_page_split_item() {
 	}
 
 	// Form
-	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . PQW_Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
+	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
 	wp_nonce_field( $nonce_action );
-	echo '<input type="hidden" name="pqw_subpage" value="' . esc_attr( $mode ) . '" />';
+	echo '<input type="hidden" name="om_subpage" value="' . esc_attr( $mode ) . '" />';
 
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
@@ -211,7 +223,7 @@ function pqw_page_split_item() {
 	echo '<div class="pqw-orders-table"><div class="table-responsive">';
 	echo '<table class="table table-striped table-bordered">';
 	echo '<thead class="table-dark"><tr>';
-	echo '<th scope="col"><input type="checkbox" id="pqw_select_all_items" aria-label="Alle auswählen" /></th>';
+	echo '<th scope="col"><input type="checkbox" id="om_select_all_items" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Beschreibung</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
@@ -324,13 +336,22 @@ function pqw_page_split_item() {
 				}
 			}
 		}
+		// ensure we have at least one option row; trim and deduplicate to avoid many empty/duplicate lines
 		if ( empty( $option_rows ) ) {
 			$option_rows[] = '';
+		} else {
+			// normalize and remove exact duplicates (keeps order)
+			$option_rows = array_map( 'trim', $option_rows );
+			$option_rows = array_values( array_unique( $option_rows ) );
+			// if dedupe removed everything (edge), ensure one empty row
+			if ( empty( $option_rows ) ) {
+				$option_rows[] = '';
+			}
 		}
 
 		$article_rowspan = count( $option_rows ) ? count( $option_rows ) : 1;
 		echo '<tr>';
-		echo '<td data-label="Auswählen"><input type="checkbox" name="items[]" value="' . $labelVal . '" class="pqw-item-checkbox" /></td>';
+		echo '<td data-label="Auswählen"><input type="checkbox" name="items[]" value="' . $labelVal . '" class="om-item-checkbox" /></td>';
 		echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Artikel">' . $prod_display . '</td>';
 		echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Beschreibung">' . $full . '</td>';
 		echo '<td rowspan="' . esc_attr( $article_rowspan ) . '" data-label="Kurzbeschreibung">' . $short . '</td>';
@@ -359,10 +380,10 @@ function pqw_page_split_item() {
 	?>
 	<script type="text/javascript">
 		(function(){
-			var selectAll = document.getElementById('pqw_select_all_items');
+			var selectAll = document.getElementById('om_select_all_items');
 			if (selectAll) {
 				selectAll.addEventListener('change', function(){
-					var checkboxes = document.querySelectorAll('input.pqw-item-checkbox');
+					var checkboxes = document.querySelectorAll('input.om-item-checkbox');
 					for (var i=0;i<checkboxes.length;i++){
 						checkboxes[i].checked = selectAll.checked;
 					}
@@ -433,29 +454,29 @@ function pqw_page_split_item() {
 <!-- NEW: starte Queue-Verarbeitung beim Laden der Seite, falls noch Einträge vorhanden -->
 	<script type="text/javascript">
 		(function(){
-			function pqwCreateQueueOverlay(initial){
-				if (document.getElementById('pqw_queue_overlay')) return;
+			function omCreateQueueOverlay(initial){
+				if (document.getElementById('om_queue_overlay')) return;
 				var style = document.createElement('style');
 				style.type = 'text/css';
 				style.appendChild(document.createTextNode(
 					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-					'#pqw_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-					'#pqw_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-					'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+					'#om_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+					'#om_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+					'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
 				));
 				document.head.appendChild(style);
 
 				var overlay = document.createElement('div');
-				overlay.id = 'pqw_queue_overlay';
+				overlay.id = 'om_queue_overlay';
 
 				var box = document.createElement('div');
-				box.id = 'pqw_queue_box';
+				box.id = 'om_queue_box';
 
 				var spinner = document.createElement('div');
-				spinner.className = 'pqw-spinner';
+				spinner.className = 'om-spinner';
 
 				var msg = document.createElement('div');
-				msg.id = 'pqw_queue_msg';
+				msg.id = 'om_queue_msg';
 				msg.style.textAlign = 'center';
 				msg.style.fontSize = '14px';
 				msg.style.color = '#222';
@@ -467,7 +488,7 @@ function pqw_page_split_item() {
 				document.body.appendChild(overlay);
 			}
 
-			function pqwRemoveQueryParam(param){
+			function omRemoveQueryParam(param){
 				try {
 					var u = new URL(window.location.href);
 					u.searchParams.delete(param);
@@ -475,7 +496,7 @@ function pqw_page_split_item() {
 				} catch (e) { /* ignore */ }
 			}
 
-			function pqwCheckQueueStatus(cb){
+			function omCheckQueueStatus(cb){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
@@ -487,23 +508,23 @@ function pqw_page_split_item() {
 						cb && cb(null);
 					}
 				};
-				xhr.send('action=pqw_queue_status');
+				xhr.send('action=om_queue_status');
 			}
 
-			function pqwTriggerQueueProcessing(){
+			function omTriggerQueueProcessing(){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-				xhr.send('action=pqw_process_queue_async');
+				xhr.send('action=om_process_queue_async');
 			}
 
-			function pqwStartQueuePolling(){
+			function omStartQueuePolling(){
 				(function poll(){
-					pqwCheckQueueStatus(function(res){
+					omCheckQueueStatus(function(res){
 						try {
 							if (res && res.success && res.data) {
 								var pending = parseInt(res.data.pending,10) || 0;
-								var msgEl = document.getElementById('pqw_queue_msg');
+								var msgEl = document.getElementById('om_queue_msg');
 								if (msgEl) msgEl.textContent = 'Verbleibend: ' + pending;
 								if (pending > 0) {
 									setTimeout(poll, 1500);
@@ -525,17 +546,17 @@ function pqw_page_split_item() {
 			// Beim Laden prüfen, ob Queue Einträge hat -> Overlay + Trigger + Polling starten
 			document.addEventListener('DOMContentLoaded', function(){
 				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?pqw_queued)
-				if (document.getElementById('pqw_queue_overlay')) return;
-				pqwCheckQueueStatus(function(res){
+				if (document.getElementById('om_queue_overlay')) return;
+				omCheckQueueStatus(function(res){
 					if (res && res.success && res.data) {
 						var pending = parseInt(res.data.pending,10) || 0;
 						if (pending > 0) {
-							pqwCreateQueueOverlay(pending);
-							pqwRemoveQueryParam('pqw_queued');
+							omCreateQueueOverlay(pending);
+							omRemoveQueryParam('om_queued');
 							// einmalig Verarbeitung auslösen
-							pqwTriggerQueueProcessing();
+							omTriggerQueueProcessing();
 							// kleine Verzögerung, damit Server starten kann
-							setTimeout(pqwStartQueuePolling, 700);
+							setTimeout(omStartQueuePolling, 700);
 						}
 					}
 				});
@@ -546,8 +567,8 @@ function pqw_page_split_item() {
 
 
 	// After the form output add centered overlay + spinner and polling JS when pqw_queued is present:
-	if ( isset( $_GET['pqw_queued'] ) && intval( $_GET['pqw_queued'] ) > 0 ) :
-		$queued = intval( $_GET['pqw_queued'] );
+	if ( isset( $_GET['om_queued'] ) && intval( $_GET['om_queued'] ) > 0 ) :
+		$queued = intval( $_GET['om_queued'] );
 		?>
 		<script type="text/javascript">
 		(function(){
@@ -556,24 +577,24 @@ function pqw_page_split_item() {
 			style.type = 'text/css';
 			style.appendChild(document.createTextNode(
 				'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-				'#pqw_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-				'#pqw_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-				'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				'#om_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+				'#om_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+				'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
 			));
 			document.head.appendChild(style);
 
 			// create overlay element
 			var overlay = document.createElement('div');
-			overlay.id = 'pqw_queue_overlay';
+			overlay.id = 'om_queue_overlay';
 
 			var box = document.createElement('div');
-			box.id = 'pqw_queue_box';
+			box.id = 'om_queue_box';
 
 			var spinner = document.createElement('div');
-			spinner.className = 'pqw-spinner';
+			spinner.className = 'om-spinner';
 
 			var msg = document.createElement('div');
-			msg.id = 'pqw_queue_msg';
+			msg.id = 'om_queue_msg';
 			msg.style.textAlign = 'center';
 			msg.style.fontSize = '14px';
 			msg.style.color = '#222';
@@ -587,7 +608,7 @@ function pqw_page_split_item() {
 			// remove pqw_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
-				u.searchParams.delete('pqw_queued');
+				u.searchParams.delete('om_queued');
 				history.replaceState && history.replaceState(null, '', u.toString());
 			} catch (e) { /* ignore */ }
 
@@ -601,7 +622,7 @@ function pqw_page_split_item() {
 						var res = JSON.parse(xhr.responseText);
 						if (res && res.success && res.data) {
 							var pending = parseInt(res.data.pending,10);
-							var msgEl = document.getElementById('pqw_queue_msg');
+							var msgEl = document.getElementById('om_queue_msg');
 							msgEl.textContent = 'Verbleibend: ' + pending;
 							if (pending > 0) {
 								setTimeout(checkStatus, 1500);
@@ -615,7 +636,7 @@ function pqw_page_split_item() {
 						}
 					} catch(e){}
 				};
-				xhr.send('action=pqw_queue_status');
+				xhr.send('action=om_queue_status');
 			}
 			// start polling shortly
 			setTimeout(checkStatus, 800);

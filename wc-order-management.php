@@ -1,12 +1,12 @@
 <?php
 /**
- * Plugin Name: PQW Order-Management
- * Plugin URI:  https://fischer-it.eu/pqw-order-management
+ * Plugin Name: Woocommerce Order-Management
+ * Plugin URI:  https://fischer-it.eu/wp-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.11.1-251211_19
+ * Version:     1.13.1-260120_20
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
- * Text Domain: pqw-order-management
+ * Text Domain: woocommerce-order-management
  * Domain Path: /languages
  */
 
@@ -14,10 +14,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class PQW_Order_Management {
+class Order_Management {
 
-	const VERSION = '1.11.1-251211_19';
-	const PLUGIN_SLUG = 'pqw-order-management';
+	const VERSION = '1.13.1-260120_20';
+	const PLUGIN_SLUG = 'woocommerce-order-management';
 
 	// Store main menu hook suffix
 	protected $menu_hook = '';
@@ -40,18 +40,18 @@ class PQW_Order_Management {
 		}
 
 		// AJAX endpoints for status polling and async processor trigger
-		add_action( 'wp_ajax_pqw_queue_status', array( $this, 'ajax_queue_status' ) );
-		add_action( 'wp_ajax_pqw_process_queue_async', array( $this, 'ajax_process_queue_async' ) );
+		add_action( 'wp_ajax_om_queue_status', array( $this, 'ajax_queue_status' ) );
+		add_action( 'wp_ajax_om_process_queue_async', array( $this, 'ajax_process_queue_async' ) );
 
 		// AJAX: process selected jobs (split or complete)
-		add_action( 'wp_ajax_pqw_process_selected_jobs', array( $this, 'ajax_process_selected_jobs' ) );
+		add_action( 'wp_ajax_om_process_selected_jobs', array( $this, 'ajax_process_selected_jobs' ) );
 
 		// AJAX endpoints for completion queue
-		add_action( 'wp_ajax_pqw_complete_queue_status', array( $this, 'ajax_complete_queue_status' ) );
-		add_action( 'wp_ajax_pqw_process_complete_queue_async', array( $this, 'ajax_process_complete_queue_async' ) );
+		add_action( 'wp_ajax_om_complete_queue_status', array( $this, 'ajax_complete_queue_status' ) );
+		add_action( 'wp_ajax_om_process_complete_queue_async', array( $this, 'ajax_process_complete_queue_async' ) );
 
 		// Register cleanup hook for cron
-		add_action( 'pqw_cleanup_queue', array( $this, 'cleanup_old_queue' ) );
+		add_action( 'om_cleanup_queue', array( $this, 'cleanup_old_queue' ) );
 	}
 
 	/**
@@ -65,33 +65,33 @@ class PQW_Order_Management {
 
 		// Bootstrap 5 local CSS from plugin assets folder
 		wp_enqueue_style(
-			'pqw-bootstrap',
+			'om-bootstrap',
 			plugin_dir_url( __FILE__ ) . 'assets/bootstrap.min.css',
 			array(),
 			'5.3.2'
 		);
 
 		// Optional small admin styles for spacing and responsive behaviour
-		wp_add_inline_style( 'pqw-bootstrap', '
-			.pqw-orders-table { margin-top: 10px; }
-			.pqw-customer-total { font-weight: 600; background: #f8f9fa; }
-			.pqw-customer-name { font-weight: 700; }
-			.pqw-small { font-size: .9rem; color: #6c757d; }
-			.pqw-order-count { font-weight: 500; margin-left: 8px; color: #6c757d; }
+		wp_add_inline_style( 'om-bootstrap', '
+			.om-orders-table { margin-top: 10px; }
+			.om-customer-total { font-weight: 600; background: #f8f9fa; }
+			.om-customer-name { font-weight: 700; }
+			.om-small { font-size: .9rem; color: #6c757d; }
+			.om-order-count { font-weight: 500; margin-left: 8px; color: #6c757d; }
 
 			/* Responsive: hide table head and show labels on each cell on small screens */
 			@media (max-width: 768px) {
-				.pqw-orders-table .table thead { display: none; }
-				.pqw-orders-table .table, 
-				.pqw-orders-table .table tbody, 
-				.pqw-orders-table .table tr, 
-				.pqw-orders-table .table td { display: block; width: 100%; }
-				.pqw-orders-table .table tr { margin-bottom: 1rem; border-bottom: 1px solid #dee2e6; }
-				.pqw-orders-table .table td { 
+				.om-orders-table .table thead { display: none; }
+				.om-orders-table .table, 
+				.om-orders-table .table tbody, 
+				.om-orders-table .table tr, 
+				.om-orders-table .table td { display: block; width: 100%; }
+				.om-orders-table .table tr { margin-bottom: 1rem; border-bottom: 1px solid #dee2e6; }
+				.om-orders-table .table td { 
 					padding: .5rem; 
 					text-align: left; 
 				}
-				.pqw-orders-table .table td[data-label]::before {
+				.om-orders-table .table td[data-label]::before {
 					content: attr(data-label) ": ";
 					font-weight: 700;
 					display: inline-block;
@@ -99,7 +99,7 @@ class PQW_Order_Management {
 					color: #212529;
 				}
 				/* keep subtotal full width */
-				.pqw-orders-table .pqw-customer-total td { text-align: right; }
+				.om-orders-table .om-customer-total td { text-align: right; }
 			}
 		' );
 	}
@@ -131,7 +131,7 @@ class PQW_Order_Management {
 			'Bestellung weiterverarbeiten - Name',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_split_name',
-			'pqw_page_split_name'
+			'om_page_split_name'
 		);
 
 		add_submenu_page(
@@ -140,7 +140,7 @@ class PQW_Order_Management {
 			'Bestellung weiterverarbeiten - Artikel',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_split_item',
-			'pqw_page_split_item'
+			'om_page_split_item'
 		);
 
 		add_submenu_page(
@@ -149,7 +149,7 @@ class PQW_Order_Management {
 			'Bestellung abschließen - Name',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_complete_name',
-			'pqw_page_complete_name'
+			'om_page_complete_name'
 		);
 
 		add_submenu_page(
@@ -158,7 +158,7 @@ class PQW_Order_Management {
 			'Bestellung abschließen - Artikel',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_complete_item',
-			'pqw_page_complete_item'
+			'om_page_complete_item'
 		);
 
 		add_submenu_page(
@@ -167,7 +167,7 @@ class PQW_Order_Management {
 			'Offene Jobs',
 			'manage_woocommerce',
 			self::PLUGIN_SLUG . '_current_jobs',
-			'pqw_page_current_jobs'
+			'om_page_current_jobs'
 		);
 	}
 
@@ -200,10 +200,10 @@ class PQW_Order_Management {
 		$is_split = strpos( $mode, 'split' ) === 0;
 		$button_label = $is_split ? __( 'Bestellungen weiterverarbeiten', 'pqw-order-management' ) : __( 'Bestellung abschließen', 'pqw-order-management' );
 		$target_status = $is_split ? 'on-hold' : 'completed';
-		$nonce_action = 'pqw_action_' . $mode;
+		$nonce_action = 'om_action_' . $mode;
 
 		// Handle POST for this subpage
-		if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['pqw_subpage'] ) && $_POST['pqw_subpage'] === $mode ) {
+		if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode ) {
 			// capability check
 			if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
 				wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
@@ -306,7 +306,7 @@ class PQW_Order_Management {
 		// Form
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_' . $mode ) ) . '">';
 		wp_nonce_field( $nonce_action );
-		echo '<input type="hidden" name="pqw_subpage" value="' . esc_attr( $mode ) . '" />';
+		echo '<input type="hidden" name="om_subpage" value="' . esc_attr( $mode ) . '" />';
 		echo '<input type="hidden" name="pqw_submode" value="' . esc_attr( $mode ) . '" />';
 		// action area
 		echo '<p>';
@@ -574,7 +574,7 @@ class PQW_Order_Management {
 	 */
 	public static function activate() {
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_queue';
+		$table = $wpdb->prefix . 'om_order_queue';
 		$charset_collate = $wpdb->get_charset_collate();
 
 		$sql = "CREATE TABLE IF NOT EXISTS {$table} (
@@ -593,7 +593,7 @@ class PQW_Order_Management {
 		dbDelta( $sql );
 
 		// Create separate complete queue table
-		$complete_table = $wpdb->prefix . 'pqw_order_complete_queue';
+		$complete_table = $wpdb->prefix . 'om_order_complete_queue';
 		$sql2 = "CREATE TABLE IF NOT EXISTS {$complete_table} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			order_id bigint(20) unsigned NOT NULL,
@@ -608,8 +608,8 @@ class PQW_Order_Management {
 		dbDelta( $sql2 );
 
 		// Schedule daily cleanup if not scheduled
-		if ( ! wp_next_scheduled( 'pqw_cleanup_queue' ) ) {
-			wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', 'pqw_cleanup_queue' );
+		if ( ! wp_next_scheduled( 'om_cleanup_queue' ) ) {
+			wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', 'om_cleanup_queue' );
 		}
 	}
 
@@ -618,7 +618,7 @@ class PQW_Order_Management {
 	 */
 	public function cleanup_old_queue() {
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_queue';
+		$table = $wpdb->prefix . 'om_order_queue';
 		$cutoff = gmdate( 'Y-m-d H:i:s', time() - 7 * DAY_IN_SECONDS );
 		// Delete only entries marked done and older than cutoff
 		$wpdb->query(
@@ -635,14 +635,14 @@ class PQW_Order_Management {
 	 */
 	public static function deactivate() {
 		// clear cleanup schedule
-		$next = wp_next_scheduled( 'pqw_cleanup_queue' );
+		$next = wp_next_scheduled( 'om_cleanup_queue' );
 		if ( $next ) {
-			wp_unschedule_event( $next, 'pqw_cleanup_queue' );
+			wp_unschedule_event( $next, 'om_cleanup_queue' );
 		}
 		// clear process queue schedule if any
-		$next2 = wp_next_scheduled( 'pqw_process_queue' );
+		$next2 = wp_next_scheduled( 'om_process_queue' );
 		if ( $next2 ) {
-			wp_unschedule_event( $next2, 'pqw_process_queue' );
+			wp_unschedule_event( $next2, 'om_process_queue' );
 		}
 	}
 
@@ -652,7 +652,7 @@ class PQW_Order_Management {
 	 */
 	public function queue_rows( $rows ) {
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_queue';
+		$table = $wpdb->prefix . 'om_order_queue';
 		$inserted = 0;
 
 		foreach ( $rows as $r ) {
@@ -691,16 +691,16 @@ class PQW_Order_Management {
 		}
 
 		// schedule wp-cron fallback if not scheduled
-		if ( $inserted > 0 && ! wp_next_scheduled( 'pqw_process_queue' ) ) {
-			wp_schedule_single_event( time() + 5, 'pqw_process_queue' );
+		if ( $inserted > 0 && ! wp_next_scheduled( 'om_process_queue' ) ) {
+			wp_schedule_single_event( time() + 5, 'om_process_queue' );
 		}
 
 		// Trigger background processing via non-blocking admin-ajax call
 		if ( $inserted > 0 ) {
 			$ajax_url = admin_url( 'admin-ajax.php' );
 			$body = array(
-				'action' => 'pqw_process_queue_async',
-				'nonce'  => wp_create_nonce( 'pqw_process_queue' ),
+				'action' => 'om_process_queue_async',
+				'nonce'  => wp_create_nonce( 'om_process_queue' ),
 			);
 			// non-blocking
 			wp_remote_post( $ajax_url, array( 'body' => $body, 'timeout' => 0.01, 'blocking' => false ) );
@@ -715,7 +715,7 @@ class PQW_Order_Management {
 	 */
 	public function queue_complete_rows( $rows ) {
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_complete_queue';
+		$table = $wpdb->prefix . 'om_order_complete_queue';
 		$inserted = 0;
 
 		foreach ( $rows as $r ) {
@@ -754,16 +754,16 @@ class PQW_Order_Management {
 		}
 
 		// schedule wp-cron fallback if not scheduled
-		if ( $inserted > 0 && ! wp_next_scheduled( 'pqw_process_complete_queue' ) ) {
-			wp_schedule_single_event( time() + 5, 'pqw_process_complete_queue' );
+		if ( $inserted > 0 && ! wp_next_scheduled( 'om_process_complete_queue' ) ) {
+			wp_schedule_single_event( time() + 5, 'om_process_complete_queue' );
 		}
 
 		// Trigger background processing via non-blocking admin-ajax call (same approach as split)
 		if ( $inserted > 0 ) {
 			$ajax_url = admin_url( 'admin-ajax.php' );
 			$body = array(
-				'action' => 'pqw_process_complete_queue_async',
-				'nonce'  => wp_create_nonce( 'pqw_process_complete_queue' ),
+				'action' => 'om_process_complete_queue_async',
+				'nonce'  => wp_create_nonce( 'om_process_complete_queue' ),
 			);
 			// non-blocking
 			wp_remote_post( $ajax_url, array( 'body' => $body, 'timeout' => 0.01, 'blocking' => false ) );
@@ -781,7 +781,7 @@ class PQW_Order_Management {
 			wp_send_json_error( 'unauthorized', 403 );
 		}
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_queue';
+		$table = $wpdb->prefix . 'om_order_queue';
 		$pending = intval( $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) ) );
 		wp_send_json_success( array( 'pending' => $pending ) );
 	}
@@ -792,7 +792,7 @@ class PQW_Order_Management {
 	public function ajax_process_queue_async() {
 		// nonce + capability
 		$nonce = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
-		if ( ! wp_verify_nonce( $nonce, 'pqw_process_queue' ) ) {
+		if ( ! wp_verify_nonce( $nonce, 'om_process_queue' ) ) {
 			wp_send_json_error( 'bad_nonce', 400 );
 		}
 		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
@@ -800,7 +800,7 @@ class PQW_Order_Management {
 		}
 
 		// run the queue processor (process a batch and reschedule if needed)
-		do_action( 'pqw_process_queue' );
+		do_action( 'om_process_queue' );
 
 		wp_send_json_success( 'started' );
 	}
@@ -814,7 +814,7 @@ class PQW_Order_Management {
 			wp_send_json_error( 'unauthorized', 403 );
 		}
 		$nonce = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
-		if ( ! wp_verify_nonce( $nonce, 'pqw_process_selected_jobs' ) ) {
+		if ( ! wp_verify_nonce( $nonce, 'om_process_selected_jobs' ) ) {
 			wp_send_json_error( 'bad_nonce', 400 );
 		}
 
@@ -822,12 +822,12 @@ class PQW_Order_Management {
 		$ids = array_map( 'intval', $ids );
 		$queue = isset( $_REQUEST['queue'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['queue'] ) ) : '';
 
-		global $wpdb, $pqw_order_management;
+		global $wpdb, $order_management;
 		if ( empty( $ids ) || ! in_array( $queue, array( 'split', 'complete' ), true ) ) {
 			wp_send_json_error( 'invalid', 400 );
 		}
 
-		$table = $wpdb->prefix . ( $queue === 'split' ? 'pqw_order_queue' : 'pqw_order_complete_queue' );
+		$table = $wpdb->prefix . ( $queue === 'split' ? 'om_order_queue' : 'om_order_complete_queue' );
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 		$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($placeholders)", $ids );
 		$rows = $wpdb->get_results( $sql );
@@ -855,8 +855,8 @@ class PQW_Order_Management {
 					}
 				}
 
-				if ( ! empty( $item_ids ) && isset( $pqw_order_management ) ) {
-					$pqw_order_management->split_order_items( $order_id, $item_ids );
+				if ( ! empty( $item_ids ) && isset( $order_management ) ) {
+					$order_management->split_order_items( $order_id, $item_ids );
 				} else {
 					// fallback: set order on-hold or cancel as in handler
 					$ord = wc_get_order( $order_id );
@@ -926,7 +926,7 @@ class PQW_Order_Management {
 			wp_send_json_error( 'unauthorized', 403 );
 		}
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_complete_queue';
+		$table = $wpdb->prefix . 'om_order_complete_queue';
 		$pending = intval( $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) ) );
 		wp_send_json_success( array( 'pending' => $pending ) );
 	}
@@ -937,7 +937,7 @@ class PQW_Order_Management {
 	public function ajax_process_complete_queue_async() {
 		// nonce + capability
 		$nonce = isset( $_REQUEST['nonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ) : '';
-		if ( ! wp_verify_nonce( $nonce, 'pqw_process_complete_queue' ) ) {
+		if ( ! wp_verify_nonce( $nonce, 'om_process_complete_queue' ) ) {
 			wp_send_json_error( 'bad_nonce', 400 );
 		}
 		if ( ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
@@ -945,7 +945,7 @@ class PQW_Order_Management {
 		}
 
 		// run the complete queue processor (process a batch and reschedule if needed)
-		do_action( 'pqw_process_complete_queue' );
+		do_action( 'om_process_complete_queue' );
 
 		wp_send_json_success( 'started' );
 	}
@@ -1117,7 +1117,7 @@ class PQW_Order_Management {
 }
 
 // --- Activation: create queue table ---
-register_activation_hook( __FILE__, array( 'PQW_Order_Management', 'activate' ) );
+register_activation_hook( __FILE__, array( 'Order_Management', 'activate' ) );
 
 // --- Dependency checks: ensure WooCommerce and PPOM are present ---
 /**
@@ -1125,7 +1125,7 @@ register_activation_hook( __FILE__, array( 'PQW_Order_Management', 'activate' ) 
  * Uses class existence and fallback to is_plugin_active for reliability.
  * @return array [ 'woocommerce' => bool, 'ppom' => bool ]
  */
-function pqw_check_required_plugins() {
+function om_check_required_plugins() {
 	$res = array( 'woocommerce' => false, 'ppom' => false );
 	// fast check for WooCommerce
 	if ( class_exists( 'WooCommerce' ) ) {
@@ -1160,8 +1160,8 @@ function pqw_check_required_plugins() {
 /**
  * Activation-time check: deactivate plugin and show error if requirements missing.
  */
-function pqw_activation_check_requirements() {
-	$req = pqw_check_required_plugins();
+function om_activation_check_requirements() {
+	$req = om_check_required_plugins();
 	$missing = array();
 	if ( ! $req['woocommerce'] ) $missing[] = 'WooCommerce';
 	if ( ! $req['ppom'] ) $missing[] = 'PPOM for WooCommerce';
@@ -1171,16 +1171,16 @@ function pqw_activation_check_requirements() {
 		wp_die( sprintf( __( 'PQW Order-Management konnte nicht aktiviert werden. Fehlende Abhängigkeiten: %s. Bitte installieren/aktivieren Sie zuerst diese Plugins.', 'pqw-order-management' ), implode( ', ', $missing ) ), '', array( 'back_link' => true ) );
 	}
 }
-register_activation_hook( __FILE__, 'pqw_activation_check_requirements' );
+register_activation_hook( __FILE__, 'om_activation_check_requirements' );
 
 /**
  * Admin notice if plugin active but dependencies missing. Visible to administrators.
  */
-function pqw_admin_dependency_notice() {
+function om_admin_dependency_notice() {
 	if ( ! current_user_can( 'activate_plugins' ) ) {
 		return;
 	}
-	$req = pqw_check_required_plugins();
+	$req = om_check_required_plugins();
 	$missing = array();
 	if ( ! $req['woocommerce'] ) $missing[] = 'WooCommerce';
 	if ( ! $req['ppom'] ) $missing[] = 'PPOM for WooCommerce';
@@ -1188,19 +1188,19 @@ function pqw_admin_dependency_notice() {
 		echo '<div class="notice notice-error"><p><strong>PQW Order-Management:</strong> Diese Erweiterung benötigt: ' . esc_html( implode( ', ', $missing ) ) . '. Bitte installieren/aktivieren Sie diese Plugins.</p></div>';
 	}
 }
-add_action( 'admin_notices', 'pqw_admin_dependency_notice' );
+add_action( 'admin_notices', 'om_admin_dependency_notice' );
 
 // Initialize plugin and expose instance globally for page handlers
-global $pqw_order_management;
-$pqw_order_management = new PQW_Order_Management();
+global $order_management;
+$order_management = new Order_Management();
 
 /**
  * Global queue processor (processes pending entries, updates status to done and reschedules if needed)
  */
-if ( ! function_exists( 'pqw_process_queue_handler' ) ) {
-	function pqw_process_queue_handler() {
-		global $wpdb, $pqw_order_management;
-		$table = $wpdb->prefix . 'pqw_order_queue';
+if ( ! function_exists( 'om_process_queue_handler' ) ) {
+	function om_process_queue_handler() {
+		global $wpdb, $order_management;
+		$table = $wpdb->prefix . 'om_order_queue';
 
 		// Fetch a batch of pending entries
 		$limit = 20;
@@ -1230,8 +1230,8 @@ if ( ! function_exists( 'pqw_process_queue_handler' ) ) {
 			}
 
 			// If there are item ids -> perform split operation for this order
-			if ( ! empty( $item_ids ) && isset( $pqw_order_management ) ) {
-				$pqw_order_management->split_order_items( $order_id, $item_ids );
+			if ( ! empty( $item_ids ) && isset( $order_management ) ) {
+				$order_management->split_order_items( $order_id, $item_ids );
 			} else {
 				// fallback: if no item ids, just set order status to on-hold
 				$ord = wc_get_order( $order_id );
@@ -1273,19 +1273,19 @@ if ( ! function_exists( 'pqw_process_queue_handler' ) ) {
 		// If there are still pending entries, schedule next run shortly
 		$remaining = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) );
 		if ( $remaining && intval( $remaining ) > 0 ) {
-			if ( ! wp_next_scheduled( 'pqw_process_queue' ) ) {
-				wp_schedule_single_event( time() + 5, 'pqw_process_queue' );
+			if ( ! wp_next_scheduled( 'om_process_queue' ) ) {
+				wp_schedule_single_event( time() + 5, 'om_process_queue' );
 			}
 		}
 	}
-	add_action( 'pqw_process_queue', 'pqw_process_queue_handler' );
+	add_action( 'om_process_queue', 'om_process_queue_handler' );
 }
 
 // --- Complete queue processor ---
-if ( ! function_exists( 'pqw_process_complete_queue_handler' ) ) {
-	function pqw_process_complete_queue_handler() {
+if ( ! function_exists( 'om_process_complete_queue_handler' ) ) {
+	function om_process_complete_queue_handler() {
 		global $wpdb;
-		$table = $wpdb->prefix . 'pqw_order_complete_queue';
+		$table = $wpdb->prefix . 'om_order_complete_queue';
 
 		// Fetch a batch of pending entries
 		$limit = 20;
@@ -1337,8 +1337,8 @@ if ( ! function_exists( 'pqw_process_complete_queue_handler' ) ) {
 			}
 		}
 	}
-	add_action( 'pqw_process_complete_queue', 'pqw_process_complete_queue_handler' );
+	add_action( 'om_process_complete_queue', 'om_process_complete_queue_handler' );
 }
 
 // register deactivation hook
-register_deactivation_hook( __FILE__, array( 'PQW_Order_Management', 'deactivate' ) );
+register_deactivation_hook( __FILE__, array( 'Order_Management', 'deactivate' ) );

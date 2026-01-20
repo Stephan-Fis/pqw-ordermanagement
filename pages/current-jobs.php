@@ -6,8 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Anzeige: Offene Jobs (Split-Queue + Complete-Queue)
  */
-function pqw_page_current_jobs() {
-    global $pqw_order_management, $wpdb;
+function om_page_current_jobs() {
+    global $order_management, $wpdb;
 
     if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
         wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
@@ -16,8 +16,8 @@ function pqw_page_current_jobs() {
     echo '<div class="wrap">';
     echo '<h1>' . esc_html__( 'Offene Jobs', 'pqw-order-management' ) . '</h1>';
 
-    $table_split = $wpdb->prefix . 'pqw_order_queue';
-    $table_complete = $wpdb->prefix . 'pqw_order_complete_queue';
+    $table_split = $wpdb->prefix . 'om_order_queue';
+    $table_complete = $wpdb->prefix . 'om_order_complete_queue';
 
     // load rows from both queues excluding already processed 'done' entries - newest first
     $split_rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, order_id, order_item_id, status, created_at FROM {$table_split} WHERE status != %s ORDER BY created_at DESC", 'done' ), ARRAY_A );
@@ -35,7 +35,7 @@ function pqw_page_current_jobs() {
         echo '<div class="table-responsive">';
         echo '<table class="table table-striped table-bordered">';
         echo '<thead class="table-dark"><tr>';
-        echo '<th><input type="checkbox" id="pqw_select_all_' . esc_attr( $title ) . '" aria-label="Alle auswählen" /></th>';
+        echo '<th><input type="checkbox" id="om_select_all_' . esc_attr( $title ) . '" aria-label="Alle auswählen" /></th>';
         echo '<th>ID</th>';
         echo '<th>' . esc_html__( 'Bestellung', 'pqw-order-management' ) . '</th>';
         echo '<th>' . esc_html__( 'Artikel', 'pqw-order-management' ) . '</th>';
@@ -96,7 +96,7 @@ function pqw_page_current_jobs() {
             }
 
             echo '<tr>';
-            echo '<td><input type="checkbox" class="pqw-job-checkbox" name="selected[]" value="' . intval( $r['id'] ) . '" /></td>';
+            echo '<td><input type="checkbox" class="om-job-checkbox" name="selected[]" value="' . intval( $r['id'] ) . '" /></td>';
             echo '<td>' . intval( $r['id'] ) . '</td>';
             echo '<td>' . $order_link . '</td>';
             echo '<td>' . esc_html( $prod_name ) . '</td>';
@@ -112,7 +112,7 @@ function pqw_page_current_jobs() {
     // render split queue table
     $render_table( $split_rows, __( 'Weiterverarbeitungs-Queue', 'pqw-order-management' ) );
     echo '<div style="margin-top:.5rem;margin-bottom:1.5rem;">';
-    echo '<button id="pqw_process_selected_split" class="button button-primary" data-queue="split">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'pqw-order-management' ) . '</button>';
+    echo '<button id="om_process_selected_split" class="button button-primary" data-queue="split">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'pqw-order-management' ) . '</button>';
     echo '<div id="pqw_confirm_split" style="display:none;margin-top:.5rem;">';
     echo '<span id="pqw_confirm_split_text"></span> ';
     echo '<button id="pqw_confirm_split_ok" class="button button-primary">' . esc_html__( 'Bestätigen', 'pqw-order-management' ) . '</button> ';
@@ -127,7 +127,7 @@ function pqw_page_current_jobs() {
     // render complete queue table
     $render_table( $complete_rows, __( 'Abschluss-Queue', 'pqw-order-management' ) );
     echo '<div style="margin-top:.5rem;">';
-    echo '<button id="pqw_process_selected_complete" class="button button-primary" data-queue="complete">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'pqw-order-management' ) . '</button>';
+    echo '<button id="om_process_selected_complete" class="button button-primary" data-queue="complete">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'pqw-order-management' ) . '</button>';
     echo '<div id="pqw_confirm_complete" style="display:none;margin-top:.5rem;">';
     echo '<span id="pqw_confirm_complete_text"></span> ';
     echo '<button id="pqw_confirm_complete_ok" class="button button-primary">' . esc_html__( 'Bestätigen', 'pqw-order-management' ) . '</button> ';
@@ -140,7 +140,7 @@ function pqw_page_current_jobs() {
     echo '</div>';
 
     // Nonce for AJAX
-    $ajax_nonce = wp_create_nonce( 'pqw_process_selected_jobs' );
+    $ajax_nonce = wp_create_nonce( 'om_process_selected_jobs' );
 
     // JS: confirmation + processing + cancel/abort
     ?>
@@ -149,7 +149,7 @@ function pqw_page_current_jobs() {
         var currentXhr = { split:null, complete:null };
 
         function collectSelected() {
-            var nodes = document.querySelectorAll('.pqw-job-checkbox:checked');
+            var nodes = document.querySelectorAll('.om-job-checkbox:checked');
             var ids = [];
             nodes.forEach(function(n){ ids.push(n.value); });
             return ids;
@@ -158,7 +158,7 @@ function pqw_page_current_jobs() {
         function sendSelected(queue, ids) {
             if (!ids.length) { alert('Keine Einträge ausgewählt.'); return; }
             var fd = new FormData();
-            fd.append('action','pqw_process_selected_jobs');
+            fd.append('action','om_process_selected_jobs');
             fd.append('nonce','<?php echo esc_js( $ajax_nonce ); ?>');
             fd.append('queue', queue);
             ids.forEach(function(id){ fd.append('ids[]', id); });
@@ -166,16 +166,16 @@ function pqw_page_current_jobs() {
             var xhr = new XMLHttpRequest();
             currentXhr[queue] = xhr;
             // toggle UI: show processing container
-            document.getElementById('pqw_processing_' + queue).style.display = '';
+            document.getElementById('om_processing_' + queue).style.display = '';
             document.getElementById('pqw_confirm_' + queue).style.display = 'none';
-            document.getElementById('pqw_process_selected_' + queue).disabled = true;
+            document.getElementById('om_process_selected_' + queue).disabled = true;
 
             xhr.open('POST','<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>',true);
             xhr.onreadystatechange = function(){
                 if (xhr.readyState === 4) {
                     currentXhr[queue] = null;
-                    document.getElementById('pqw_processing_' + queue).style.display = 'none';
-                    document.getElementById('pqw_process_selected_' + queue).disabled = false;
+                    document.getElementById('om_processing_' + queue).style.display = 'none';
+                    document.getElementById('om_process_selected_' + queue).disabled = false;
                     try {
                         var r = JSON.parse(xhr.responseText);
                         if (r.success) { alert('Erfolgreich verarbeitet: ' + r.data.processed); location.reload(); }
@@ -202,8 +202,8 @@ function pqw_page_current_jobs() {
 
         document.addEventListener('DOMContentLoaded', function(){
             // bind initial process buttons to show confirmation
-            var btnSplit = document.getElementById('pqw_process_selected_split');
-            var btnComplete = document.getElementById('pqw_process_selected_complete');
+            var btnSplit = document.getElementById('om_process_selected_split');
+            var btnComplete = document.getElementById('om_process_selected_complete');
             if (btnSplit) btnSplit.addEventListener('click', function(){ showConfirmation('split'); });
             if (btnComplete) btnComplete.addEventListener('click', function(){ showConfirmation('complete'); });
 
@@ -211,17 +211,17 @@ function pqw_page_current_jobs() {
             ['split','complete'].forEach(function(queue){
                 var ok = document.getElementById('pqw_confirm_' + queue + '_ok');
                 var cancel = document.getElementById('pqw_confirm_' + queue + '_cancel');
-                var processingCancel = document.getElementById('pqw_processing_' + queue + '_cancel');
+                var processingCancel = document.getElementById('om_processing_' + queue + '_cancel');
                 if (ok) ok.addEventListener('click', function(){ var ids = collectSelected(); hideConfirmation(queue); sendSelected(queue, ids); });
                 if (cancel) cancel.addEventListener('click', function(){ hideConfirmation(queue); });
                 if (processingCancel) processingCancel.addEventListener('click', function(){ var x = currentXhr[queue]; if (x) { x.abort(); currentXhr[queue] = null; document.getElementById('pqw_processing_' + queue).style.display = 'none'; document.getElementById('pqw_process_selected_' + queue).disabled = false; alert('Verarbeitung abgebrochen.'); } });
             });
 
             // select-all per table
-            document.querySelectorAll('[id^="pqw_select_all_"]').forEach(function(cb){
+            document.querySelectorAll('[id^="om_select_all_"]').forEach(function(cb){
                 cb.addEventListener('change', function(){
                     var table = this.closest('table'); if (!table) return;
-                    table.querySelectorAll('.pqw-job-checkbox').forEach(function(ch){ ch.checked = cb.checked; });
+                    table.querySelectorAll('.om-job-checkbox').forEach(function(ch){ ch.checked = cb.checked; });
                 });
             });
         });

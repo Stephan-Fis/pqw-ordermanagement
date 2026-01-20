@@ -6,15 +6,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Bestellung abschließen - Artikel (aggregierte Ansicht für on-hold)
  */
-function pqw_page_complete_item() {
-	global $pqw_order_management;
+function om_page_complete_item() {
+	global $order_management;
 
 	$mode = 'complete_item';
 	$button_label = __( 'Bestellung abschließen (Artikel)', 'pqw-order-management' );
-	$nonce_action  = 'pqw_action_' . $mode;
+	$nonce_action  = 'om_action_' . $mode;
 
 	// handle POST: queue selected products' order-items into complete queue
-	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['pqw_subpage'] ) && $_POST['pqw_subpage'] === $mode && isset( $_POST['products_action'] ) && $_POST['products_action'] === 'complete' ) {
+	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode && isset( $_POST['products_action'] ) && $_POST['products_action'] === 'complete' ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
 			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
 		}
@@ -46,9 +46,9 @@ function pqw_page_complete_item() {
 			}
 			$inserted = 0;
 			if ( ! empty( $rows ) ) {
-				$inserted = $pqw_order_management->queue_complete_rows( $rows );
+				$inserted = $order_management->queue_complete_rows( $rows );
 			}
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_complete_queued' => $inserted ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_complete_queued' => $inserted ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
@@ -59,19 +59,19 @@ function pqw_page_complete_item() {
 	echo '<h1>' . esc_html( $button_label ) . '</h1>';
 
 	// Notices
-	if ( isset( $_GET['pqw_queued'] ) ) {
-		$cnt = absint( $_GET['pqw_queued'] );
+	if ( isset( $_GET['om_queued'] ) ) {
+		$cnt = absint( $_GET['om_queued'] );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
 	}
 	// Notices: check for pqw_complete_queued and show notice
-	if ( isset( $_GET['pqw_complete_queued'] ) ) {
-		$cnt = absint( $_GET['pqw_complete_queued'] );
+	if ( isset( $_GET['om_complete_queued'] ) ) {
+		$cnt = absint( $_GET['om_complete_queued'] );
 		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Complete-Queue Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
 	}
 
 	// Check WooCommerce
 	if ( ! class_exists( 'WooCommerce' ) ) {
-		echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> PQW Order-Management benötigt WooCommerce.</p></div>';
+		echo '<div class="notice notice-warning"><p><strong>Order-Management benötigt WooCommerce.</strong></p></div>';
 		echo '</div>';
 		return;
 	}
@@ -224,7 +224,7 @@ function pqw_page_complete_item() {
 						'product_name' => $parent_name,
 						'short_desc'   => $parent_short,
 						'full_desc'    => $parent_full,
-						'variant_label'=> $variant_label,
+						'variant_label' => $variant_label,
 						// store per-order-item details so export can include options per original item
 						'per_items'    => array(),
 					);
@@ -282,8 +282,8 @@ function pqw_page_complete_item() {
 	?>
 	<script type="text/javascript">
 		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\pqw-order-management\pages\complete-item.php */
-		var pqw_export_products = <?php echo wp_json_encode( $aggregated ); ?>;
-		var pqw_export_product_orders = <?php echo wp_json_encode( $product_customers ); ?>;
+		var om_export_products = <?php echo wp_json_encode( $aggregated ); ?>;
+		var om_export_product_orders = <?php echo wp_json_encode( $product_customers ); ?>;
 	</script>
 	<script src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . '../assets/xlsx.full.min.js' ); ?>"></script>
 	<script type="text/javascript">
@@ -319,13 +319,13 @@ function pqw_page_complete_item() {
 				var rows = [];
 				for (var i=0;i<checked.length;i++){
 					var key = checked[i].value;
-					var p = pqw_export_products[key];
+					var p = om_export_products[key];
 					if (!p) continue;
 					var title = (p.product_name || '');
 					if (p.variant_label) title = title + ' — ' + p.variant_label;
 
 					// If we have per-customer/order-item details, output one row per ordered item including its options
-					var map = pqw_export_product_orders[key];
+					var map = om_export_product_orders[key];
 					if (map) {
 						for (var cust in map) {
 							if (!map.hasOwnProperty(cust)) continue;
@@ -369,7 +369,7 @@ function pqw_page_complete_item() {
 				var persons = {};
 				for (var i=0;i<checked.length;i++){
 					var pid = checked[i].value;
-					var map = pqw_export_product_orders[pid];
+					var map = om_export_product_orders[pid];
 					if (!map) continue;
 					for (var custKey in map) {
 						if (!map.hasOwnProperty(custKey)) continue;
@@ -527,9 +527,9 @@ function pqw_page_complete_item() {
 	<?php
 
 	// Form (add export buttons next to the submit)
-	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . PQW_Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
+	echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . Order_Management::PLUGIN_SLUG . '_' . $mode ) ) . '">';
 	wp_nonce_field( $nonce_action );
-	echo '<input type="hidden" name="pqw_subpage" value="' . esc_attr( $mode ) . '" />';
+	echo '<input type="hidden" name="om_subpage" value="' . esc_attr( $mode ) . '" />';
 	// NEW: ensure the server-side POST handler sees that this is a "complete" submission
 	echo '<input type="hidden" name="products_action" value="complete" />';
 	echo '<p>';
@@ -541,10 +541,10 @@ function pqw_page_complete_item() {
 	echo '</p>';
 
 	// Table: Artikel | Beschreibung | Kurzbeschreibung | Gesamtmenge
-	echo '<div class="pqw-orders-table"><div class="table-responsive">';
+	echo '<div class="om-orders-table"><div class="table-responsive">';
 	echo '<table class="table table-striped table-bordered">';
 	echo '<thead class="table-dark"><tr>';
-	echo '<th scope="col"><input type="checkbox" id="pqw_select_all_products" aria-label="Alle auswählen" /></th>';
+	echo '<th scope="col"><input type="checkbox" id="om_select_all_products" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Beschreibung</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
@@ -630,7 +630,7 @@ function pqw_page_complete_item() {
 
 		// render first row with product info and first Optionen entry
 		echo '<tr>';
-		echo '<td data-label="Auswählen" rowspan="' . esc_attr( $rowspan ) . '"><input type="checkbox" name="products[]" value="' . $labelVal . '" class="pqw-product-checkbox" /></td>';
+		echo '<td data-label="Auswählen" rowspan="' . esc_attr( $rowspan ) . '"><input type="checkbox" name="products[]" value="' . $labelVal . '" class="om-product-checkbox" /></td>';
 		echo '<td data-label="Artikel" rowspan="' . esc_attr( $rowspan ) . '">' . esc_html( $prod_display ) . '</td>';
 		echo '<td data-label="Beschreibung" rowspan="' . esc_attr( $rowspan ) . '">' . $full . '</td>';
 		echo '<td data-label="Kurzbeschreibung" rowspan="' . esc_attr( $rowspan ) . '">' . $short . '</td>';
@@ -654,10 +654,10 @@ function pqw_page_complete_item() {
 	?>
 	<script type="text/javascript">
 		(function(){
-			var selectAll = document.getElementById('pqw_select_all_products');
+			var selectAll = document.getElementById('om_select_all_products');
 			if (selectAll) {
 				selectAll.addEventListener('change', function(){
-					var checkboxes = document.querySelectorAll('input.pqw-product-checkbox');
+					var checkboxes = document.querySelectorAll('input.om-product-checkbox');
 					for (var i=0;i<checkboxes.length;i++){
 						checkboxes[i].checked = selectAll.checked;
 					}
@@ -668,8 +668,8 @@ function pqw_page_complete_item() {
 	<?php
 
 	// NEW: centered overlay + spinner and polling JS when pqw_complete_queued is present
-	if ( isset( $_GET['pqw_complete_queued'] ) && intval( $_GET['pqw_complete_queued'] ) > 0 ) :
-		$queued = intval( $_GET['pqw_complete_queued'] );
+	if ( isset( $_GET['om_complete_queued'] ) && intval( $_GET['om_complete_queued'] ) > 0 ) :
+		$queued = intval( $_GET['om_complete_queued'] );
 		?>
 		<script type="text/javascript">
 		(function(){
@@ -709,7 +709,7 @@ function pqw_page_complete_item() {
 			// remove pqw_complete_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
-				u.searchParams.delete('pqw_complete_queued');
+				u.searchParams.delete('om_complete_queued');
 				history.replaceState && history.replaceState(null, '', u.toString());
 			} catch (e) { /* ignore */ }
 
@@ -736,7 +736,7 @@ function pqw_page_complete_item() {
 						}
 					} catch(e){}
 				};
-				xhr.send('action=pqw_complete_queue_status');
+				xhr.send('action=om_complete_queue_status');
 			}
 			// start polling shortly
 			setTimeout(checkStatus, 800);
@@ -803,14 +803,14 @@ function pqw_page_complete_item() {
 						cb && cb(null);
 					}
 				};
-				xhr.send('action=pqw_complete_queue_status');
+				xhr.send('action=om_complete_queue_status');
 			}
 
 			function pqwTriggerCompleteProcessing(){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-				xhr.send('action=pqw_process_complete_queue_async');
+				xhr.send('action=om_process_complete_queue_async');
 			}
 
 			function pqwStartCompletePolling(){
@@ -844,7 +844,7 @@ function pqw_page_complete_item() {
 						var pending = parseInt(res.data.pending,10) || 0;
 						if (pending > 0) {
 							pqwCreateCompleteOverlay(pending);
-							pqwRemoveQueryParam('pqw_complete_queued');
+							pqwRemoveQueryParam('om_complete_queued');
 							pqwTriggerCompleteProcessing();
 							setTimeout(pqwStartCompletePolling, 700);
 						}

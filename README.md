@@ -1,149 +1,78 @@
-# PQW Order-Management
+# Order-Management
 
-Ein WordPress/WooCommerce Plugin für erweiterte Bestellungsverwaltung mit Aufteilungs- und Abschlussfunktionen.
+Ein WordPress/WooCommerce Plugin zur erweiterten Verwaltung von Bestellungen im Admin-Bereich. Ermöglicht Aufteilen und Abschließen von Bestellungen auf Kunden- oder Artikel-Ebene sowie asynchrone Verarbeitung über eine Queue.
 
 ## Überblick
 
-Das PQW Order-Management Plugin erweitert WooCommerce um leistungsstarke Funktionen zur Verwaltung von Bestellungen im Status "in Bearbeitung". Es ermöglicht das Aufteilen und Abschließen von Bestellungen auf Kunden- oder Artikelebene mit einer modernen, responsiven Benutzeroberfläche.
+Das Plugin liefert eine responsive Admin-Oberfläche (Bootstrap) zum Verwalten von Bestellungen mit Status "in Bearbeitung" und "wartend". Es unterstützt Bulk-Operationen, Export-Funktionen und ein Queue-basiertes Hintergrund-Processing für große Mengen.
+
+## Wichtige Änderungen (aktuell)
+
+- Robustere Variantenerkennung: Wenn `product_id` fehlt, wird jetzt die Parent-Produkt-ID aus der Variation ermittelt, sodass Varianten korrekt gruppiert werden.
+- Deduplizierung von Optionszeilen: Leere oder identische Options-/Meta-Zeilen werden vor dem Rendern dedupliziert, um unnötige leere Tabellenzeilen zu vermeiden.
+- Alphabetische Sortierung: Aggregierte Artikel werden nach Produktname sortiert, Kundenlisten sind nach Namen sortiert.
+- Queue-Overlay & Auto-Start: Nach Anlegen von Queue-Einträgen startet ein zentriertes Overlay mit Spinner und Polling; die asynchrone Verarbeitung wird automatisch ausgelöst.
+- Verbesserter XLSX-Export: Exportiert aggregierte Daten pro Artikel und optional pro Kunde (inkl. Optionen), lädt SheetJS nur bei Bedarf.
 
 ## Features
 
-### Bestellungsaufteilung
-
-- **Nach Kunde**: Alle Bestellungen eines Kunden auf "wartend" setzen
-- **Nach Artikel**: Einzelne Artikel in separate Bestellungen aufteilen
-- Automatische Stornierung bei 0€-Bestellungen
-- Erhaltung der Bestellhistorie
-
-### Bestellungsabschluss
-
-- **Nach Kunde**: Alle Bestellungen eines Kunden abschließen
-- **Nach Artikel**: Einzelne Artikel-Bestellungen abschließen
-- Intelligente Behandlung leerer/0€-Bestellungen
-
-### Queue-System
-
-- **Asynchrone Verarbeitung** für große Datenmengen
-- **Batch-Processing** (20 Einträge pro Durchlauf)
-- **Automatische Wiederholung** bei ausstehenden Einträgen
-- **WP-Cron Fallback** für zuverlässige Verarbeitung
-
-### Benutzeroberfläche
-
-- **Bootstrap 5** Design
-- **Responsive Tabellen** für alle Bildschirmgrößen
-- **Bulk-Operationen** mit Checkbox-Auswahl
-- **Real-time Status** Updates via AJAX
+- Aufteilen (Split) nach Kunde oder Artikel
+- Abschließen (Complete) nach Kunde oder Artikel
+- Asynchrone Queue-Verarbeitung mit Batch-Size (Standard 20)
+- WP-Cron Fallback bei fehlendem asynchronen Trigger
+- Responsive Tabellen mit per-Zeile Labels für mobile Ansicht
+- XLSX-Export (SheetJS, lokal gebündelt)
+- Nonce- und Capability-Checks für Sicherheit
 
 ## Installation
 
-1. Plugin-Dateien in `/wp-content/plugins/pqw-ordermanagement/` hochladen
-2. Plugin im WordPress Admin-Bereich aktivieren
-3. WooCommerce muss installiert und aktiviert sein
-4. Berechtigung: `manage_woocommerce` oder `manage_options`
+1. Plugin-Verzeichnis nach `/wp-content/plugins/ordermanagement/` hochladen.  
+2. Im WordPress Admin aktivieren.  
+3. Voraussetzungen: WooCommerce installiert/aktiviert. (Optional: PPOM wird geprüft, aber nicht zwingend benötigt.)
 
-## Technische Details
+## Kompatibilität
 
-### Datenbank-Tabellen
+- WordPress: 5.0+  
+- WooCommerce: 3.0+  
+- PPOM for WooCommerce 33.0+
+- PHP: 7.4+  
+- Bootstrap 5 (gebündelt), SheetJS (gebündelt)
 
-- `wp_pqw_order_queue` - Queue für Aufteilungsoperationen
-- `wp_pqw_order_complete_queue` - Queue für Abschlussoperationen
+## Verwendung (Kurz)
 
-### AJAX-Endpunkte
+- Admin → Orders → Wähle Sub-Page (Split/Complete Name/Item).  
+- Markiere Kunden oder Artikel per Checkbox.  
+- Klick auf Aktion-Button: bei >1 Eintrag werden Queue-Einträge erstellt und asynchron verarbeitet; bei 1 Kunde erfolgt ggf. direkte Verarbeitung.  
+- Nach Queue-Erstellung erscheint ein overlay und die Verarbeitung startet automatisch; Seite refresh nach Abschluss.
 
-- `pqw_queue_status` - Status der Aufteilungs-Queue
-- `pqw_process_queue_async` - Trigger für asynchrone Verarbeitung
-- `pqw_complete_queue_status` - Status der Abschluss-Queue  
-- `pqw_process_complete_queue_async` - Trigger für Abschluss-Verarbeitung
+## Troubleshooting
 
-### Cron-Jobs
+- Artikel werden nicht gruppiert: Prüfe, ob in Bestell-Items `variation_id` oder `product_id` vorhanden sind; Plugin versucht, Parent-ID aus Variation zu ermitteln.  
+- Leere/duplizierte Optionszeilen: Werden nun client- und serverseitig dedupliziert; bei abweichendem Verhalten prüfen, ob Item-Meta unterschiedliche Keys enthält.  
+- Queue startet nicht: Stelle sicher, dass AJAX-Aufrufe möglich sind und WP-Cron nicht deaktiviert ist; Logs/DB-Tabelle `wp_om_order_queue` prüfen.
 
-- `pqw_process_queue` - Verarbeitung der Aufteilungs-Queue
-- `pqw_process_complete_queue` - Verarbeitung der Abschluss-Queue
-- `pqw_cleanup_queue` - Tägliche Bereinigung alter Queue-Einträge (7+ Tage)
+## Datenbank (kurz)
 
-### WordPress Hooks
+- `wp_om_order_queue` — Queue für Split-Operationen  
+- `wp_om_order_complete_queue` — Queue für Complete-Operationen
 
-- `admin_menu` - Registrierung der Admin-Menüs
-- `admin_enqueue_scripts` - Laden von Bootstrap CSS
-- `wp_ajax_*` - AJAX-Handler für asynchrone Verarbeitung
+## AJAX-Endpunkte
 
-## Verwendung
+- `om_queue_status`, `om_process_queue_async`  
+- `om_complete_queue_status`, `om_process_complete_queue_async`  
+- `om_process_selected_jobs`
 
-### Admin-Menü
+## Changelog
 
-Navigate zu **PQW Orders** im WordPress Admin:
-
-1. **Bestellung aufteilen - Name**: Alle Bestellungen ausgewählter Kunden aufteilen
-2. **Bestellung aufteilen - Artikel**: Einzelne Artikel in separate Bestellungen aufteilen  
-3. **Bestellung abschließen - Name**: Alle Bestellungen ausgewählter Kunden abschließen
-4. **Bestellung abschließen - Artikel**: Artikel-Bestellungen abschließen
-
-### Workflow
-
-1. Kunden über Checkboxes auswählen
-2. Aktion per Button ausführen
-3. Bei >1 Kunde: Queue-basierte Verarbeitung
-4. Bei 1 Kunde: Sofortige Verarbeitung
-5. Status-Updates in Echtzeit
-
-## Konfiguration
-
-### Batch-Größe
-
-Standard: 20 Einträge pro Durchlauf (anpassbar in `pqw_process_queue_handler()`)
-
-### Cleanup-Intervall
-
-Standard: Täglich, löscht Queue-Einträge älter als 7 Tage
-
-### Berechtigungen
-
-- `manage_woocommerce` - Vollzugriff auf alle Funktionen
-- `manage_options` - Alternative Berechtigung für Administratoren
-
-## Sicherheit
-
-- **Nonce-Verification** für alle Formulare
-- **Capability-Checks** für alle Aktionen
-- **Input-Sanitization** für alle Benutzereingaben
-- **SQL-Prepared-Statements** für Datenbankzugriffe
-
-## Performance
-
-- **Non-blocking AJAX** für Queue-Verarbeitung
-- **Batch-Processing** verhindert Timeouts
-- **Automatische Bereinigung** verhindert Datenbank-Aufblähung
-- **Conditional Loading** von CSS/JS nur auf Plugin-Seiten
-
-## Debugging
-
-Queue-Status prüfen:
-
-```sql
-SELECT * FROM wp_pqw_order_queue WHERE status = 'pending';
-SELECT * FROM wp_pqw_order_complete_queue WHERE status = 'pending';
-```
-
-Cron-Jobs prüfen:
-
-```php
-wp_next_scheduled('pqw_process_queue');
-wp_next_scheduled('pqw_cleanup_queue');
-```
+- 1.13.1-260120_20
+  - Variant-Parent-Fallback implementiert
+  - Deduplizierung leerer/duplizierter Option-Zeilen
+  - Alphabetische Sortierung für aggregierte Listen
+  - Queue-Overlay / Auto-Start + Polling
+  - Verbesserter XLSX-Export (per-Artikel / per-Person)
 
 ## Lizenz
 
-Dieses Plugin wird unter der GPL v2+ Lizenz bereitgestellt.
+GPL v2+
 
-## Abhängigkeiten
-
-- **WordPress** 5.0+
-- **WooCommerce** 3.0+
-- **PHP** 7.4+
-- **Bootstrap** (gebundelt)
-- **xlsx-sheetjs** (gebundelt)
-
-## Beitrag
-
-Bei Fehlern oder Verbesserungsvorschlägen bitte Issue erstellen oder Pull Request einreichen.
+Bei Problemen oder Feature-Wünschen bitte ein Issue öffnen oder PR einreichen.

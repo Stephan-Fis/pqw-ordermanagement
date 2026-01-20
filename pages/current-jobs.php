@@ -10,11 +10,11 @@ function om_page_current_jobs() {
     global $order_management, $wpdb;
 
     if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-        wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
+        wp_die( __( 'Nicht autorisiert', 'om-order-management' ) );
     }
 
     echo '<div class="wrap">';
-    echo '<h1>' . esc_html__( 'Offene Jobs', 'pqw-order-management' ) . '</h1>';
+    echo '<h1>' . esc_html__( 'Offene Jobs', 'om-order-management' ) . '</h1>';
 
     $table_split = $wpdb->prefix . 'om_order_queue';
     $table_complete = $wpdb->prefix . 'om_order_complete_queue';
@@ -27,21 +27,21 @@ function om_page_current_jobs() {
     $render_table = function( $rows, $title ) {
         echo '<h2>' . esc_html( $title ) . '</h2>';
         if ( empty( $rows ) ) {
-            echo '<p>' . esc_html__( 'Keine Einträge.', 'pqw-order-management' ) . '</p>';
+            echo '<p>' . esc_html__( 'Keine Einträge.', 'om-order-management' ) . '</p>';
             return;
         }
 
-        echo '<div class="pqw-orders-table">';
+        echo '<div class="om-orders-table">';
         echo '<div class="table-responsive">';
         echo '<table class="table table-striped table-bordered">';
         echo '<thead class="table-dark"><tr>';
         echo '<th><input type="checkbox" id="om_select_all_' . esc_attr( $title ) . '" aria-label="Alle auswählen" /></th>';
         echo '<th>ID</th>';
-        echo '<th>' . esc_html__( 'Bestellung', 'pqw-order-management' ) . '</th>';
-        echo '<th>' . esc_html__( 'Artikel', 'pqw-order-management' ) . '</th>';
-        echo '<th>' . esc_html__( 'Kurzbeschreibung', 'pqw-order-management' ) . '</th>';
-        echo '<th>' . esc_html__( 'Status', 'pqw-order-management' ) . '</th>';
-        echo '<th>' . esc_html__( 'Erstellt', 'pqw-order-management' ) . '</th>';
+        echo '<th>' . esc_html__( 'Bestellung', 'om-order-management' ) . '</th>';
+        echo '<th>' . esc_html__( 'Artikel', 'om-order-management' ) . '</th>';
+        echo '<th>' . esc_html__( 'Kurzbeschreibung', 'om-order-management' ) . '</th>';
+        echo '<th>' . esc_html__( 'Status', 'om-order-management' ) . '</th>';
+        echo '<th>' . esc_html__( 'Erstellt', 'om-order-management' ) . '</th>';
         echo '</tr></thead><tbody>';
 
         foreach ( $rows as $r ) {
@@ -110,32 +110,32 @@ function om_page_current_jobs() {
     };
 
     // render split queue table
-    $render_table( $split_rows, __( 'Weiterverarbeitungs-Queue', 'pqw-order-management' ) );
+    $render_table( $split_rows, __( 'Weiterverarbeitungs-Queue', 'om-order-management' ) );
     echo '<div style="margin-top:.5rem;margin-bottom:1.5rem;">';
-    echo '<button id="om_process_selected_split" class="button button-primary" data-queue="split">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'pqw-order-management' ) . '</button>';
-    echo '<div id="pqw_confirm_split" style="display:none;margin-top:.5rem;">';
-    echo '<span id="pqw_confirm_split_text"></span> ';
-    echo '<button id="pqw_confirm_split_ok" class="button button-primary">' . esc_html__( 'Bestätigen', 'pqw-order-management' ) . '</button> ';
-    echo '<button id="pqw_confirm_split_cancel" class="button">' . esc_html__( 'Abbrechen', 'pqw-order-management' ) . '</button>';
+    echo '<button id="om_process_selected_split" class="button button-primary" data-queue="split">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'om-order-management' ) . '</button>';
+    echo '<div id="om_confirm_split" style="display:none;margin-top:.5rem;">';
+    echo '<span id="om_confirm_split_text"></span> ';
+    echo '<button id="om_confirm_split_ok" class="button button-primary">' . esc_html__( 'Bestätigen', 'om-order-management' ) . '</button> ';
+    echo '<button id="om_confirm_split_cancel" class="button">' . esc_html__( 'Abbrechen', 'om-order-management' ) . '</button>';
     echo '</div>';
-    echo '<div id="pqw_processing_split" style="display:none;margin-top:.5rem;">';
-    echo '<span id="pqw_processing_split_text">' . esc_html__( 'Verarbeitung läuft...', 'pqw-order-management' ) . '</span> ';
-    echo '<button id="pqw_processing_split_cancel" class="button">' . esc_html__( 'Abbrechen', 'pqw-order-management' ) . '</button>';
+    echo '<div id="om_processing_split" style="display:none;margin-top:.5rem;">';
+    echo '<span id="om_processing_split_text">' . esc_html__( 'Verarbeitung läuft...', 'om-order-management' ) . '</span> ';
+    echo '<button id="om_processing_split_cancel" class="button">' . esc_html__( 'Abbrechen', 'om-order-management' ) . '</button>';
     echo '</div>';
     echo '</div>';
 
     // render complete queue table
-    $render_table( $complete_rows, __( 'Abschluss-Queue', 'pqw-order-management' ) );
+    $render_table( $complete_rows, __( 'Abschluss-Queue', 'om-order-management' ) );
     echo '<div style="margin-top:.5rem;">';
-    echo '<button id="om_process_selected_complete" class="button button-primary" data-queue="complete">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'pqw-order-management' ) . '</button>';
-    echo '<div id="pqw_confirm_complete" style="display:none;margin-top:.5rem;">';
-    echo '<span id="pqw_confirm_complete_text"></span> ';
-    echo '<button id="pqw_confirm_complete_ok" class="button button-primary">' . esc_html__( 'Bestätigen', 'pqw-order-management' ) . '</button> ';
-    echo '<button id="pqw_confirm_complete_cancel" class="button">' . esc_html__( 'Abbrechen', 'pqw-order-management' ) . '</button>';
+    echo '<button id="om_process_selected_complete" class="button button-primary" data-queue="complete">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'om-order-management' ) . '</button>';
+    echo '<div id="om_confirm_complete" style="display:none;margin-top:.5rem;">';
+    echo '<span id="om_confirm_complete_text"></span> ';
+    echo '<button id="om_confirm_complete_ok" class="button button-primary">' . esc_html__( 'Bestätigen', 'om-order-management' ) . '</button> ';
+    echo '<button id="om_confirm_complete_cancel" class="button">' . esc_html__( 'Abbrechen', 'om-order-management' ) . '</button>';
     echo '</div>';
-    echo '<div id="pqw_processing_complete" style="display:none;margin-top:.5rem;">';
-    echo '<span id="pqw_processing_complete_text">' . esc_html__( 'Verarbeitung läuft...', 'pqw-order-management' ) . '</span> ';
-    echo '<button id="pqw_processing_complete_cancel" class="button">' . esc_html__( 'Abbrechen', 'pqw-order-management' ) . '</button>';
+    echo '<div id="om_processing_complete" style="display:none;margin-top:.5rem;">';
+    echo '<span id="om_processing_complete_text">' . esc_html__( 'Verarbeitung läuft...', 'om-order-management' ) . '</span> ';
+    echo '<button id="om_processing_complete_cancel" class="button">' . esc_html__( 'Abbrechen', 'om-order-management' ) . '</button>';
     echo '</div>';
     echo '</div>';
 
@@ -167,7 +167,7 @@ function om_page_current_jobs() {
             currentXhr[queue] = xhr;
             // toggle UI: show processing container
             document.getElementById('om_processing_' + queue).style.display = '';
-            document.getElementById('pqw_confirm_' + queue).style.display = 'none';
+            document.getElementById('om_confirm_' + queue).style.display = 'none';
             document.getElementById('om_process_selected_' + queue).disabled = true;
 
             xhr.open('POST','<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>',true);
@@ -189,14 +189,14 @@ function om_page_current_jobs() {
         function showConfirmation(queue){
             var ids = collectSelected();
             if (!ids.length) { alert('Keine Einträge ausgewählt.'); return; }
-            var container = document.getElementById('pqw_confirm_' + queue);
-            var text = document.getElementById('pqw_confirm_' + queue + '_text');
+            var container = document.getElementById('om_confirm_' + queue);
+            var text = document.getElementById('om_confirm_' + queue + '_text');
             text.textContent = ids.length + ' Einträge verarbeiten?';
             container.style.display = '';
         }
 
         function hideConfirmation(queue){
-            var container = document.getElementById('pqw_confirm_' + queue);
+            var container = document.getElementById('om_confirm_' + queue);
             if (container) container.style.display = 'none';
         }
 
@@ -209,12 +209,12 @@ function om_page_current_jobs() {
 
             // bind confirm/cancel buttons
             ['split','complete'].forEach(function(queue){
-                var ok = document.getElementById('pqw_confirm_' + queue + '_ok');
-                var cancel = document.getElementById('pqw_confirm_' + queue + '_cancel');
+                var ok = document.getElementById('om_confirm_' + queue + '_ok');
+                var cancel = document.getElementById('om_confirm_' + queue + '_cancel');
                 var processingCancel = document.getElementById('om_processing_' + queue + '_cancel');
                 if (ok) ok.addEventListener('click', function(){ var ids = collectSelected(); hideConfirmation(queue); sendSelected(queue, ids); });
                 if (cancel) cancel.addEventListener('click', function(){ hideConfirmation(queue); });
-                if (processingCancel) processingCancel.addEventListener('click', function(){ var x = currentXhr[queue]; if (x) { x.abort(); currentXhr[queue] = null; document.getElementById('pqw_processing_' + queue).style.display = 'none'; document.getElementById('pqw_process_selected_' + queue).disabled = false; alert('Verarbeitung abgebrochen.'); } });
+                if (processingCancel) processingCancel.addEventListener('click', function(){ var x = currentXhr[queue]; if (x) { x.abort(); currentXhr[queue] = null; document.getElementById('om_processing_' + queue).style.display = 'none'; document.getElementById('om_process_selected_' + queue).disabled = false; alert('Verarbeitung abgebrochen.'); } });
             });
 
             // select-all per table

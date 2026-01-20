@@ -198,7 +198,7 @@ class Order_Management {
 	protected function render_subpage( $mode ) {
 		// determine labels and desired status
 		$is_split = strpos( $mode, 'split' ) === 0;
-		$button_label = $is_split ? __( 'Bestellungen weiterverarbeiten', 'pqw-order-management' ) : __( 'Bestellung abschließen', 'pqw-order-management' );
+		$button_label = $is_split ? __( 'Bestellungen weiterverarbeiten', 'om-order-management' ) : __( 'Bestellung abschließen', 'om-order-management' );
 		$target_status = $is_split ? 'on-hold' : 'completed';
 		$nonce_action = 'om_action_' . $mode;
 
@@ -206,18 +206,18 @@ class Order_Management {
 		if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode ) {
 			// capability check
 			if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-				wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
+				wp_die( __( 'Nicht autorisiert', 'om-order-management' ) );
 			}
 			// nonce
 			if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
-				wp_die( __( 'Nonce ungültig', 'pqw-order-management' ) );
+				wp_die( __( 'Nonce ungültig', 'om-order-management' ) );
 			}
 
 			$selected_customers = isset( $_POST['customers'] ) ? array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['customers'] ) ) : array();
 			$selected_customers = array_filter( array_unique( $selected_customers ) );
 
 			if ( empty( $selected_customers ) ) {
-				$redirect = add_query_arg( array( 'page' => self::PLUGIN_SLUG . '_' . $mode, 'pqw_updated' => 0 ), admin_url( 'admin.php' ) );
+				$redirect = add_query_arg( array( 'page' => self::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
 				wp_safe_redirect( $redirect );
 				exit;
 			}
@@ -239,12 +239,12 @@ class Order_Management {
 					foreach ( $order_ids as $oid ) {
 						$order = wc_get_order( $oid );
 						if ( $order && $target_status !== $order->get_status() ) {
-							$order->update_status( $target_status, sprintf( __( 'Status via PQW Order-Management (%s) gesetzt', 'pqw-order-management' ), $mode ) );
+							$order->update_status( $target_status, sprintf( __( 'Status via PQW Order-Management (%s) gesetzt', 'om-order-management' ), $mode ) );
 							$updated++;
 						}
 					}
 				}
-				$redirect = add_query_arg( array( 'page' => self::PLUGIN_SLUG . '_' . $mode, 'pqw_updated' => $updated ), admin_url( 'admin.php' ) );
+				$redirect = add_query_arg( array( 'page' => self::PLUGIN_SLUG . '_' . $mode, 'om_updated' => $updated ), admin_url( 'admin.php' ) );
 				wp_safe_redirect( $redirect );
 				exit;
 			}
@@ -266,7 +266,7 @@ class Order_Management {
 			}
 
 			// Redirect with count
-			$redirect = add_query_arg( array( 'page' => self::PLUGIN_SLUG . '_' . $mode, 'pqw_queued' => $inserted ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => self::PLUGIN_SLUG . '_' . $mode, 'om_queued' => $inserted ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
@@ -276,17 +276,17 @@ class Order_Management {
 		echo '<h1>' . esc_html( $button_label ) . ' — ' . esc_html( str_replace( '_', ' ', $mode ) ) . '</h1>';
 
 		// Notices (update / queued)
-		if ( isset( $_GET['pqw_updated'] ) ) {
-			$cnt = absint( $_GET['pqw_updated'] );
+		if ( isset( $_GET['om_updated'] ) ) {
+			$cnt = absint( $_GET['om_updated'] );
 			if ( $cnt > 0 ) {
-				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( _n( '%d Bestellung verarbeitet.', '%d Bestellungen verarbeitet.', $cnt, 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+				echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( _n( '%d Bestellung verarbeitet.', '%d Bestellungen verarbeitet.', $cnt, 'om-order-management' ), $cnt ) ) . '</p></div>';
 			} else {
-				echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Keine Bestellungen ausgewählt oder keine Änderungen erforderlich.', 'pqw-order-management' ) . '</p></div>';
+				echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Keine Bestellungen ausgewählt oder keine Änderungen erforderlich.', 'om-order-management' ) . '</p></div>';
 			}
 		}
-		if ( isset( $_GET['pqw_queued'] ) ) {
-			$cnt = absint( $_GET['pqw_queued'] );
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+		if ( isset( $_GET['om_queued'] ) ) {
+			$cnt = absint( $_GET['om_queued'] );
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'om-order-management' ), $cnt ) ) . '</p></div>';
 		}
 
 		// Check Woocommerce
@@ -307,11 +307,11 @@ class Order_Management {
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_' . $mode ) ) . '">';
 		wp_nonce_field( $nonce_action );
 		echo '<input type="hidden" name="om_subpage" value="' . esc_attr( $mode ) . '" />';
-		echo '<input type="hidden" name="pqw_submode" value="' . esc_attr( $mode ) . '" />';
+		echo '<input type="hidden" name="om_submode" value="' . esc_attr( $mode ) . '" />';
 		// action area
 		echo '<p>';
 		echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
-		$desc = $is_split ? __( 'Markierte Personen: alle Bestellungen/Artikel dieser Person werden getrennt/auf "wartend" gesetzt.', 'pqw-order-management' ) : __( 'Markierte Personen: alle Bestellungen/Artikel dieser Person werden abgeschlossen.', 'pqw-order-management' );
+		$desc = $is_split ? __( 'Markierte Personen: alle Bestellungen/Artikel dieser Person werden getrennt/auf "wartend" gesetzt.', 'om-order-management' ) : __( 'Markierte Personen: alle Bestellungen/Artikel dieser Person werden abgeschlossen.', 'om-order-management' );
 		echo '<span class="description">' . esc_html( $desc ) . '</span>';
 		echo '</p>';
 
@@ -323,10 +323,10 @@ class Order_Management {
 		?>
 		<script type="text/javascript">
 			(function(){
-				var selectAll = document.getElementById('pqw_select_all');
+				var selectAll = document.getElementById('om_select_all');
 				if (selectAll) {
 					selectAll.addEventListener('change', function(){
-						var checkboxes = document.querySelectorAll('input.pqw-customer-checkbox');
+						var checkboxes = document.querySelectorAll('input.om-customer-checkbox');
 						for (var i=0;i<checkboxes.length;i++){
 							checkboxes[i].checked = selectAll.checked;
 						}
@@ -457,12 +457,12 @@ class Order_Management {
 	 * Now: one checkbox per customer; removed customer total row.
 	 */
 	public function render_orders_table( $customers ) {
-		echo '<div class="pqw-orders-table">';
+		echo '<div class="om-orders-table">';
 		echo '<div class="table-responsive">';
 		echo '<table class="table table-striped table-bordered">';
 		echo '<thead class="table-dark"><tr>';
 		// New first column: Select (per customer)
-		echo '<th scope="col"><input type="checkbox" id="pqw_select_all" aria-label="Alle auswählen" /></th>';
+		echo '<th scope="col"><input type="checkbox" id="om_select_all" aria-label="Alle auswählen" /></th>';
 		echo '<th scope="col">Person</th>';
 		echo '<th scope="col">Article</th>';
 		echo '<th scope="col">VariantenID</th>';
@@ -477,7 +477,7 @@ class Order_Management {
 		foreach ( $customers as $cust_key => $cust_data ) {
 			$display_name = trim( $cust_data['first_name'] . ' ' . $cust_data['last_name'] );
 			if ( empty( $display_name ) ) {
-				$display_name = $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'pqw-order-management' );
+				$display_name = $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'om-order-management' );
 			}
 			$rows = $cust_data['rows'];
 			if ( empty( $rows ) ) {
@@ -490,14 +490,14 @@ class Order_Management {
 
 				// Select column: show checkbox only on the first row for this customer
 				if ( $first_row ) {
-					echo '<td data-label="Select"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
+					echo '<td data-label="Select"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="om-customer-checkbox" /></td>';
 				} else {
 					echo '<td data-label="Select"></td>';
 				}
 
 				if ( $first_row ) {
-					$person_html  = '<div class="pqw-customer-name">' . esc_html( $display_name ) . '</div>';
-					//$person_html .= '<div class="pqw-small">' . esc_html( $cust_data['email'] ) . '</div>';
+					$person_html  = '<div class="om-customer-name">' . esc_html( $display_name ) . '</div>';
+					//$person_html .= '<div class="om-small">' . esc_html( $cust_data['email'] ) . '</div>';
 					// data-label for responsive view; rowspan kept for desktop
 					echo '<td rowspan="' . esc_attr( count( $rows ) ) . '" data-label="Person">' . $person_html . '</td>';
 					$first_row = false;
@@ -523,7 +523,7 @@ class Order_Management {
 				// VariantenID
 				echo '<td data-label="VariantenID">' . ( $vid > 0 ? intval( $vid ) : '' ) . '</td>';
 				// Variantenlabel
-				echo '<td data-label="Variantenlabel">' . ( ! empty( $row['variant_label'] ) ? '<div class="pqw-small">' . esc_html( $row['variant_label'] ) . '</div>' : '' ) . '</td>';
+				echo '<td data-label="Variantenlabel">' . ( ! empty( $row['variant_label'] ) ? '<div class="om-small">' . esc_html( $row['variant_label'] ) . '</div>' : '' ) . '</td>';
 				// Short / Full description
 				echo '<td data-label="Short description">' . esc_html( wp_trim_words( wp_strip_all_tags( $short_raw ), 20, '…' ) ) . '</td>';
 				echo '<td data-label="Description">' . esc_html( wp_trim_words( wp_strip_all_tags( $full_raw ), 30, '…' ) ) . '</td>';
@@ -540,7 +540,7 @@ class Order_Management {
 		echo '</tbody>';
 		echo '</table>';
 		echo '</div>'; // .table-responsive
-		echo '</div>'; // .pqw-orders-table
+		echo '</div>'; // .om-orders-table
 	}
 
 	// NEW: robust helper to extract variation id from an order item (covers different WC versions / meta)
@@ -862,18 +862,18 @@ class Order_Management {
 					$ord = wc_get_order( $order_id );
 					if ( $ord ) {
 						if ( 'on-hold' !== $ord->get_status() ) {
-							$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (selected)', 'pqw-order-management' ) );
+							$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (selected)', 'om-order-management' ) );
 						}
 						$items = $ord->get_items();
 						if ( empty( $items ) ) {
 							if ( 'cancelled' !== $ord->get_status() ) {
-								$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'pqw-order-management' ) );
+								$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'om-order-management' ) );
 							}
 						} else {
 							$ord_total = floatval( $ord->get_total() );
 							if ( 0.0 >= $ord_total ) {
 								if ( 'cancelled' !== $ord->get_status() ) {
-									$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'pqw-order-management' ) );
+									$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'om-order-management' ) );
 								}
 							}
 						}
@@ -897,15 +897,15 @@ class Order_Management {
 					$ord_total = floatval( $ord->get_total() );
 					if ( empty( $items ) ) {
 						if ( 'cancelled' !== $ord->get_status() ) {
-							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'pqw-order-management' ) );
+							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'om-order-management' ) );
 						}
 					} elseif ( 0.0 >= $ord_total ) {
 						if ( 'cancelled' !== $ord->get_status() ) {
-							$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'pqw-order-management' ) );
+							$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'om-order-management' ) );
 						}
 					} else {
 						if ( 'completed' !== $ord->get_status() ) {
-							$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (selected)', 'pqw-order-management' ) );
+							$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (selected)', 'om-order-management' ) );
 						}
 					}
 				}
@@ -1083,9 +1083,9 @@ class Order_Management {
 			// If new order total is 0 => cancel it automatically, otherwise set to on-hold
 			$new_total = floatval( $new_order->get_total() );
 			if ( 0.0 >= $new_total ) {
-				$new_order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'pqw-order-management' ) );
+				$new_order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'om-order-management' ) );
 			} else {
-				$new_order->update_status( 'on-hold', __( 'Aufgesplittet via PQW Order-Management', 'pqw-order-management' ) );
+				$new_order->update_status( 'on-hold', __( 'Aufgesplittet via PQW Order-Management', 'om-order-management' ) );
 			}
 
 			$moved_count++;
@@ -1100,14 +1100,14 @@ class Order_Management {
 		if ( empty( $remaining_items ) ) {
 			// statt löschen: auf "cancelled" setzen, damit Audit/History erhalten bleibt
 			if ( 'cancelled' !== $order->get_status() ) {
-				$order->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Weiterverarbeitung', 'pqw-order-management' ) );
+				$order->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Weiterverarbeitung', 'om-order-management' ) );
 			}
 		} else {
 			$orig_total = floatval( $order->get_total() );
 			if ( 0.0 >= $orig_total ) {
-				$order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'pqw-order-management' ) );
+				$order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'om-order-management' ) );
 			} else {
-				$order->add_order_note( __( 'Positionen ausgegliedert via PQW Order-Management', 'pqw-order-management' ) );
+				$order->add_order_note( __( 'Positionen ausgegliedert via PQW Order-Management', 'om-order-management' ) );
 				$order->save();
 			}
 		}
@@ -1168,7 +1168,7 @@ function om_activation_check_requirements() {
 	if ( ! empty( $missing ) ) {
 		// prevent activation
 		deactivate_plugins( plugin_basename( __FILE__ ) );
-		wp_die( sprintf( __( 'PQW Order-Management konnte nicht aktiviert werden. Fehlende Abhängigkeiten: %s. Bitte installieren/aktivieren Sie zuerst diese Plugins.', 'pqw-order-management' ), implode( ', ', $missing ) ), '', array( 'back_link' => true ) );
+		wp_die( sprintf( __( 'PQW Order-Management konnte nicht aktiviert werden. Fehlende Abhängigkeiten: %s. Bitte installieren/aktivieren Sie zuerst diese Plugins.', 'om-order-management' ), implode( ', ', $missing ) ), '', array( 'back_link' => true ) );
 	}
 }
 register_activation_hook( __FILE__, 'om_activation_check_requirements' );
@@ -1237,20 +1237,20 @@ if ( ! function_exists( 'om_process_queue_handler' ) ) {
 				$ord = wc_get_order( $order_id );
 				if ( $ord ) {
 					if ( 'on-hold' !== $ord->get_status() ) {
-						$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (Queue) gesetzt', 'pqw-order-management' ) );
+						$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (Queue) gesetzt', 'om-order-management' ) );
 					}
 					// If this order has no items, cancel it
 					$items = $ord->get_items();
 					if ( empty( $items ) ) {
 						if ( 'cancelled' !== $ord->get_status() ) {
-							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'pqw-order-management' ) );
+							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'om-order-management' ) );
 						}
 					} else {
 						// If total is 0, also cancel
 						$ord_total = floatval( $ord->get_total() );
 						if ( 0.0 >= $ord_total ) {
 							if ( 'cancelled' !== $ord->get_status() ) {
-								$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'pqw-order-management' ) );
+								$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'om-order-management' ) );
 							}
 						}
 					}
@@ -1305,17 +1305,17 @@ if ( ! function_exists( 'om_process_complete_queue_handler' ) ) {
 				if ( empty( $items ) ) {
 					// no items -> cancel to keep history
 					if ( 'cancelled' !== $ord->get_status() ) {
-						$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'pqw-order-management' ) );
+						$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'om-order-management' ) );
 					}
 				} elseif ( 0.0 >= $ord_total ) {
 					// zero total -> cancel
 					if ( 'cancelled' !== $ord->get_status() ) {
-						$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'pqw-order-management' ) );
+						$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'om-order-management' ) );
 					}
 				} else {
 					// normal case: complete if not already
 					if ( 'completed' !== $ord->get_status() ) {
-						$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (Queue)', 'pqw-order-management' ) );
+						$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (Queue)', 'om-order-management' ) );
 					}
 				}
 			}
@@ -1332,8 +1332,8 @@ if ( ! function_exists( 'om_process_complete_queue_handler' ) ) {
 		// If there are still pending entries, schedule next run shortly
 		$remaining = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) );
 		if ( $remaining && intval( $remaining ) > 0 ) {
-			if ( ! wp_next_scheduled( 'pqw_process_complete_queue' ) ) {
-				wp_schedule_single_event( time() + 5, 'pqw_process_complete_queue' );
+			if ( ! wp_next_scheduled( 'om_process_complete_queue' ) ) {
+				wp_schedule_single_event( time() + 5, 'om_process_complete_queue' );
 			}
 		}
 	}

@@ -10,16 +10,16 @@ function om_page_complete_item() {
 	global $order_management;
 
 	$mode = 'complete_item';
-	$button_label = __( 'Bestellung abschließen (Artikel)', 'pqw-order-management' );
+	$button_label = __( 'Bestellung abschließen (Artikel)', 'om-order-management' );
 	$nonce_action  = 'om_action_' . $mode;
 
 	// handle POST: queue selected products' order-items into complete queue
 	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode && isset( $_POST['products_action'] ) && $_POST['products_action'] === 'complete' ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
+			wp_die( __( 'Nicht autorisiert', 'om-order-management' ) );
 		}
 		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
-			wp_die( __( 'Nonce ungültig', 'pqw-order-management' ) );
+			wp_die( __( 'Nonce ungültig', 'om-order-management' ) );
 		}
 
 		// we use string keys like 'v123' for variants and 'p123' for products
@@ -61,12 +61,12 @@ function om_page_complete_item() {
 	// Notices
 	if ( isset( $_GET['om_queued'] ) ) {
 		$cnt = absint( $_GET['om_queued'] );
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'om-order-management' ), $cnt ) ) . '</p></div>';
 	}
-	// Notices: check for pqw_complete_queued and show notice
+	// Notices: check for om_complete_queued and show notice
 	if ( isset( $_GET['om_complete_queued'] ) ) {
 		$cnt = absint( $_GET['om_complete_queued'] );
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Complete-Queue Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Complete-Queue Einträge angelegt.', 'om-order-management' ), $cnt ) ) . '</p></div>';
 	}
 
 	// Check WooCommerce
@@ -186,7 +186,7 @@ function om_page_complete_item() {
 			$customer_key  = $user_id ? 'user_' . intval( $user_id ) : 'guest_' . sanitize_email( $billing_email );
 			$person_name   = trim( $billing_first . ' ' . $billing_last );
 			if ( empty( $person_name ) ) {
-				$person_name = $billing_email ? $billing_email : __( 'Gast', 'pqw-order-management' );
+				$person_name = $billing_email ? $billing_email : __( 'Gast', 'om-order-management' );
 			}
 
 			foreach ( $order->get_items() as $item ) {
@@ -281,7 +281,7 @@ function om_page_complete_item() {
 	}
 	?>
 	<script type="text/javascript">
-		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\pqw-order-management\pages\complete-item.php */
+		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\om-order-management\pages\complete-item.php */
 		var om_export_products = <?php echo wp_json_encode( $aggregated ); ?>;
 		var om_export_product_orders = <?php echo wp_json_encode( $product_customers ); ?>;
 	</script>
@@ -512,12 +512,12 @@ function om_page_complete_item() {
 				}, 150);
 			}
 
-			waitFor('#pqw_export_products_btn', function(el){
+			waitFor('#om_export_products_btn', function(el){
 				el.addEventListener('click', function(){
 					loadSheetJS(function(){ exportProducts(); });
 				});
 			});
-			waitFor('#pqw_export_products_with_person_btn', function(el){
+			waitFor('#om_export_products_with_person_btn', function(el){
 				el.addEventListener('click', function(){
 					loadSheetJS(function(){ exportProductsWithPersons(); });
 				});
@@ -535,8 +535,8 @@ function om_page_complete_item() {
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
 	// client-side export buttons
-	echo '<button type="button" id="pqw_export_products_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export XLSX', 'pqw-order-management' ) . '</button>';
-	echo '<button type="button" id="pqw_export_products_with_person_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export mit Personen', 'pqw-order-management' ) . '</button>';
+	echo '<button type="button" id="om_export_products_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export XLSX', 'om-order-management' ) . '</button>';
+	echo '<button type="button" id="om_export_products_with_person_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export mit Personen', 'om-order-management' ) . '</button>';
 	echo '<span class="description">Markierte Artikel: die markierten Artikel werden aus den Bestellungen ausgegliedert und verarbeitet.</span>';
 	echo '</p>';
 
@@ -667,7 +667,7 @@ function om_page_complete_item() {
 	</script>
 	<?php
 
-	// NEW: centered overlay + spinner and polling JS when pqw_complete_queued is present
+	// NEW: centered overlay + spinner and polling JS when om_complete_queued is present
 	if ( isset( $_GET['om_complete_queued'] ) && intval( $_GET['om_complete_queued'] ) > 0 ) :
 		$queued = intval( $_GET['om_complete_queued'] );
 		?>
@@ -677,25 +677,25 @@ function om_page_complete_item() {
 			var style = document.createElement('style');
 			style.type = 'text/css';
 			style.appendChild(document.createTextNode(
-				'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-				'#pqw_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-				'#pqw_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-				'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+				'#om_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+				'#om_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+				'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 			));
 			document.head.appendChild(style);
 
 			// create overlay element
 			var overlay = document.createElement('div');
-			overlay.id = 'pqw_complete_overlay';
+			overlay.id = 'om_complete_overlay';
 
 			var box = document.createElement('div');
-			box.id = 'pqw_complete_box';
+			box.id = 'om_complete_box';
 
 			var spinner = document.createElement('div');
-			spinner.className = 'pqw-spinner';
+			spinner.className = 'om-spinner';
 
 			var msg = document.createElement('div');
-			msg.id = 'pqw_complete_msg';
+			msg.id = 'om_complete_msg';
 			msg.style.textAlign = 'center';
 			msg.style.fontSize = '14px';
 			msg.style.color = '#222';
@@ -706,7 +706,7 @@ function om_page_complete_item() {
 			overlay.appendChild(box);
 			document.body.appendChild(overlay);
 
-			// remove pqw_complete_queued from URL so reload doesn't retrigger the overlay
+			// remove om_complete_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
 				u.searchParams.delete('om_complete_queued');
@@ -723,7 +723,7 @@ function om_page_complete_item() {
 						var res = JSON.parse(xhr.responseText);
 						if (res && res.success && res.data) {
 							var pending = parseInt(res.data.pending,10);
-							var msgEl = document.getElementById('pqw_complete_msg');
+							var msgEl = document.getElementById('om_complete_msg');
 							msgEl.textContent = 'Verbleibend: ' + pending;
 							if (pending > 0) {
 								setTimeout(checkStatus, 1500);
@@ -749,29 +749,29 @@ function om_page_complete_item() {
 	?>
 	<script type="text/javascript">
 		(function(){
-			function pqwCreateCompleteOverlay(initial){
-				if (document.getElementById('pqw_complete_overlay')) return;
+			function omCreateCompleteOverlay(initial){
+				if (document.getElementById('om_complete_overlay')) return;
 				var style = document.createElement('style');
 				style.type = 'text/css';
 				style.appendChild(document.createTextNode(
-					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-					'#pqw_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-					'#pqw_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-					'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+					'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+					'#om_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+					'#om_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+					'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 				));
 				document.head.appendChild(style);
 
 				var overlay = document.createElement('div');
-				overlay.id = 'pqw_complete_overlay';
+				overlay.id = 'om_complete_overlay';
 
 				var box = document.createElement('div');
-				box.id = 'pqw_complete_box';
+				box.id = 'om_complete_box';
 
 				var spinner = document.createElement('div');
-				spinner.className = 'pqw-spinner';
+				spinner.className = 'om-spinner';
 
 				var msg = document.createElement('div');
-				msg.id = 'pqw_complete_msg';
+				msg.id = 'om_complete_msg';
 				msg.style.textAlign = 'center';
 				msg.style.fontSize = '14px';
 				msg.style.color = '#222';
@@ -783,7 +783,7 @@ function om_page_complete_item() {
 				document.body.appendChild(overlay);
 			}
 
-			function pqwRemoveQueryParam(param){
+			function omRemoveQueryParam(param){
 				try {
 					var u = new URL(window.location.href);
 					u.searchParams.delete(param);
@@ -791,7 +791,7 @@ function om_page_complete_item() {
 				} catch (e) { /* ignore */ }
 			}
 
-			function pqwCheckCompleteStatus(cb){
+			function omCheckCompleteStatus(cb){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
@@ -806,20 +806,20 @@ function om_page_complete_item() {
 				xhr.send('action=om_complete_queue_status');
 			}
 
-			function pqwTriggerCompleteProcessing(){
+			function omTriggerCompleteProcessing(){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
 				xhr.send('action=om_process_complete_queue_async');
 			}
 
-			function pqwStartCompletePolling(){
+			function omStartCompletePolling(){
 				(function poll(){
-					pqwCheckCompleteStatus(function(res){
+					omCheckCompleteStatus(function(res){
 						try {
 							if (res && res.success && res.data) {
 								var pending = parseInt(res.data.pending,10) || 0;
-								var msgEl = document.getElementById('pqw_complete_msg');
+								var msgEl = document.getElementById('om_complete_msg');
 								if (msgEl) msgEl.textContent = 'Verbleibend: ' + pending;
 								if (pending > 0) {
 									setTimeout(poll, 1500);
@@ -838,15 +838,15 @@ function om_page_complete_item() {
 			}
 
 			document.addEventListener('DOMContentLoaded', function(){
-				if (document.getElementById('pqw_complete_overlay')) return;
-				pqwCheckCompleteStatus(function(res){
+				if (document.getElementById('om_complete_overlay')) return;
+				omCheckCompleteStatus(function(res){
 					if (res && res.success && res.data) {
 						var pending = parseInt(res.data.pending,10) || 0;
 						if (pending > 0) {
-							pqwCreateCompleteOverlay(pending);
-							pqwRemoveQueryParam('om_complete_queued');
-							pqwTriggerCompleteProcessing();
-							setTimeout(pqwStartCompletePolling, 700);
+							omCreateCompleteOverlay(pending);
+							omRemoveQueryParam('om_complete_queued');
+							omTriggerCompleteProcessing();
+							setTimeout(omStartCompletePolling, 700);
 						}
 					}
 				});

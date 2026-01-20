@@ -11,17 +11,17 @@ function om_page_split_name() {
 	// reuse logic from previous render_subpage for mode 'split_name'
 	$mode = 'split_name';
 	$is_split = true;
-	$button_label = __( 'Bestellungen weiterverarbeiten', 'pqw-order-management' );
+	$button_label = __( 'Bestellungen weiterverarbeiten', 'om-order-management' );
 	$target_status = 'on-hold';
 	$nonce_action = 'om_action_' . $mode;
 
 	// Handle POST
 	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
+			wp_die( __( 'Nicht autorisiert', 'om-order-management' ) );
 		}
 		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
-			wp_die( __( 'Nonce ungültig', 'pqw-order-management' ) );
+			wp_die( __( 'Nonce ungültig', 'om-order-management' ) );
 		}
 		$selected_customers = isset( $_POST['customers'] ) ? array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['customers'] ) ) : array();
 		$selected_customers = array_filter( array_unique( $selected_customers ) );
@@ -62,17 +62,17 @@ function om_page_split_name() {
 	echo '<div class="wrap">';
 	echo '<h1>' . esc_html( $button_label ) . ' — ' . esc_html( str_replace( '_', ' ', $mode ) ) . '</h1>';
 
-	if ( isset( $_GET['pqw_updated'] ) ) {
-		$cnt = absint( $_GET['pqw_updated'] );
+	if ( isset( $_GET['om_updated'] ) ) {
+		$cnt = absint( $_GET['om_updated'] );
 		if ( $cnt > 0 ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( _n( '%d Bestellung verarbeitet.', '%d Bestellungen verarbeitet.', $cnt, 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( _n( '%d Bestellung verarbeitet.', '%d Bestellungen verarbeitet.', $cnt, 'om-order-management' ), $cnt ) ) . '</p></div>';
 		} else {
-			echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Keine Bestellungen ausgewählt oder keine Änderungen erforderlich.', 'pqw-order-management' ) . '</p></div>';
+			echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Keine Bestellungen ausgewählt oder keine Änderungen erforderlich.', 'om-order-management' ) . '</p></div>';
 		}
 	}
-	if ( isset( $_GET['pqw_queued'] ) ) {
-		$cnt = absint( $_GET['pqw_queued'] );
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+	if ( isset( $_GET['om_queued'] ) ) {
+		$cnt = absint( $_GET['om_queued'] );
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'om-order-management' ), $cnt ) ) . '</p></div>';
 	}
 
 	if ( ! class_exists( 'WooCommerce' ) ) {
@@ -202,7 +202,7 @@ function om_page_split_name() {
 		} elseif ( $first_name ) {
 			$display_name = $first_name;
 		} else {
-			$display_name = $c['email'] ? $c['email'] : __( 'Gast', 'pqw-order-management' );
+			$display_name = $c['email'] ? $c['email'] : __( 'Gast', 'om-order-management' );
 		}
 		$items = $data['items'];
 		if ( empty( $items ) ) {
@@ -315,9 +315,9 @@ function om_page_split_name() {
 			}
 
 			if ( $first_customer_row ) {
-				$person_html = '<div class="pqw-customer-name">' . esc_html( $display_name ) . '</div>';
+				$person_html = '<div class="om-customer-name">' . esc_html( $display_name ) . '</div>';
 				$email_val = isset( $c['email'] ) ? $c['email'] : '';
-				$email_html = '<div class="pqw-customer-email">' . esc_html( $email_val ) . '</div>';
+				$email_html = '<div class="om-customer-email">' . esc_html( $email_val ) . '</div>';
 				echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="Person">' . $person_html . '</td>';
 				echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="E-Mail">' . $email_html . '</td>';
 				$first_customer_row = false;
@@ -433,7 +433,7 @@ function om_page_split_name() {
 			}
 
 			// Klick-Handler für Export-Button
-			var expBtn = document.getElementById('pqw_export_xlsx');
+			var expBtn = document.getElementById('om_export_xlsx');
 			if (expBtn){
 				expBtn.addEventListener('click', function(){
 					loadSheetJS(function(){
@@ -453,7 +453,7 @@ function om_page_split_name() {
 							var tzM = pad(Math.abs(tz) % 60);
 							return y + '-' + m + '-' + d2 + '_' + hh + '-' + mm + '-' + ss + '_' + sign + tzH + tzM;
 						}
-						var fname = 'pqw-split-name-' + localDateStamp(d) + '.xlsx';
+						var fname = 'om-split-name-' + localDateStamp(d) + '.xlsx';
 						exportTableToXlsx(fname);
 					});
 				});
@@ -512,28 +512,28 @@ function om_page_split_name() {
 	<script type="text/javascript">
 		(function(){
 			function omCreateQueueOverlay(initial){
-				if (document.getElementById('pqw_queue_overlay')) return;
+				if (document.getElementById('om_queue_overlay')) return;
 				var style = document.createElement('style');
 				style.type = 'text/css';
 				style.appendChild(document.createTextNode(
-					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-					'#pqw_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-					'#pqw_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-					'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+					'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+					'#om_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+					'#om_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+					'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 				));
 				document.head.appendChild(style);
 
 				var overlay = document.createElement('div');
-				overlay.id = 'pqw_queue_overlay';
+				overlay.id = 'om_queue_overlay';
 
 				var box = document.createElement('div');
-				box.id = 'pqw_queue_box';
+				box.id = 'om_queue_box';
 
 				var spinner = document.createElement('div');
-				spinner.className = 'pqw-spinner';
+				spinner.className = 'om-spinner';
 
 				var msg = document.createElement('div');
-				msg.id = 'pqw_queue_msg';
+				msg.id = 'om_queue_msg';
 				msg.style.textAlign = 'center';
 				msg.style.fontSize = '14px';
 				msg.style.color = '#222';
@@ -572,7 +572,7 @@ function om_page_split_name() {
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-				xhr.send('action=pqw_process_queue_async');
+				xhr.send('action=om_process_queue_async');
 			}
 
 			function omStartQueuePolling(){
@@ -581,7 +581,7 @@ function om_page_split_name() {
 						try {
 							if (res && res.success && res.data) {
 								var pending = parseInt(res.data.pending,10) || 0;
-								var msgEl = document.getElementById('pqw_queue_msg');
+								var msgEl = document.getElementById('om_queue_msg');
 								if (msgEl) msgEl.textContent = 'Verbleibend: ' + pending;
 								if (pending > 0) {
 									setTimeout(poll, 1500);
@@ -602,8 +602,8 @@ function om_page_split_name() {
 
 			// Beim Laden prüfen, ob Queue Einträge hat -> Overlay + Trigger + Polling starten
 			document.addEventListener('DOMContentLoaded', function(){
-				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?pqw_queued)
-				if (document.getElementById('pqw_queue_overlay')) return;
+				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?om_queued)
+				if (document.getElementById('om_queue_overlay')) return;
 				omCheckQueueStatus(function(res){
 					if (res && res.success && res.data) {
 						var pending = parseInt(res.data.pending,10) || 0;
@@ -622,7 +622,7 @@ function om_page_split_name() {
 	</script>
 	<?php
 
-	// After the form output add centered overlay + spinner and polling JS when pqw_queued is present:
+	// After the form output add centered overlay + spinner and polling JS when om_queued is present:
 	if ( isset( $_GET['om_queued'] ) && intval( $_GET['om_queued'] ) > 0 ) :
 		$queued = intval( $_GET['om_queued'] );
 		?>
@@ -632,25 +632,25 @@ function om_page_split_name() {
 			var style = document.createElement('style');
 			style.type = 'text/css';
 			style.appendChild(document.createTextNode(
-				'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-				'#pqw_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-				'#pqw_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-				'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+				'#om_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+				'#om_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+				'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 			));
 			document.head.appendChild(style);
 
 			// create overlay element
 			var overlay = document.createElement('div');
-			overlay.id = 'pqw_queue_overlay';
+			overlay.id = 'om_queue_overlay';
 
 			var box = document.createElement('div');
-			box.id = 'pqw_queue_box';
+			box.id = 'om_queue_box';
 
 			var spinner = document.createElement('div');
-			spinner.className = 'pqw-spinner';
+			spinner.className = 'om-spinner';
 
 			var msg = document.createElement('div');
-			msg.id = 'pqw_queue_msg';
+			msg.id = 'om_queue_msg';
 			msg.style.textAlign = 'center';
 			msg.style.fontSize = '14px';
 			msg.style.color = '#222';
@@ -661,7 +661,7 @@ function om_page_split_name() {
 			overlay.appendChild(box);
 			document.body.appendChild(overlay);
 
-			// remove pqw_queued from URL so reload doesn't retrigger the overlay
+			// remove om_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
 				u.searchParams.delete('om_queued');
@@ -678,13 +678,13 @@ function om_page_split_name() {
 						var res = JSON.parse(xhr.responseText);
 						if (res && res.success && res.data) {
 							var pending = parseInt(res.data.pending,10);
-							var msgEl = document.getElementById('pqw_queue_msg');
+							var msgEl = document.getElementById('om_queue_msg');
 							msgEl.textContent = 'Verbleibend: ' + pending;
 							if (pending > 0) {
 								setTimeout(checkStatus, 1500);
 							} else {
 								msgEl.textContent = 'Abarbeitung abgeschlossen.';
-								// nach kurzer Verzögerung die Seite neu laden (ohne pqw_queued)
+								// nach kurzer Verzögerung die Seite neu laden (ohne om_queued)
 								setTimeout(function(){
 									window.location.reload();
 								}, 1000);

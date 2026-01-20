@@ -9,16 +9,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 function om_page_complete_name() {
 	global $order_management;
 	$mode = 'complete_name';
-	$button_label = __( 'Bestellung abschließen', 'pqw-order-management' );
+	$button_label = __( 'Bestellung abschließen', 'om-order-management' );
 	$nonce_action = 'om_action_' . $mode;
 
 	// Handle complete POST: always queue selected customers' order rows into complete queue
 	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode && ! isset( $_POST['om_export_action'] ) ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
+			wp_die( __( 'Nicht autorisiert', 'om-order-management' ) );
 		}
 		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
-			wp_die( __( 'Nonce ungültig', 'pqw-order-management' ) );
+			wp_die( __( 'Nonce ungültig', 'om-order-management' ) );
 		}
 
 		$selected_customers = isset( $_POST['customers'] ) ? array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['customers'] ) ) : array();
@@ -162,10 +162,10 @@ function om_page_complete_name() {
 			$da = trim( ( isset( $a['first_name'] ) ? $a['first_name'] : '' ) . ' ' . ( isset( $a['last_name'] ) ? $a['last_name'] : '' ) );
 			$db = trim( ( isset( $b['first_name'] ) ? $b['first_name'] : '' ) . ' ' . ( isset( $b['last_name'] ) ? $b['last_name'] : '' ) );
 			if ( $da === '' ) {
-				$da = ! empty( $a['email'] ) ? $a['email'] : __( 'Gast', 'pqw-order-management' );
+				$da = ! empty( $a['email'] ) ? $a['email'] : __( 'Gast', 'om-order-management' );
 			}
 			if ( $db === '' ) {
-				$db = ! empty( $b['email'] ) ? $b['email'] : __( 'Gast', 'pqw-order-management' );
+				$db = ! empty( $b['email'] ) ? $b['email'] : __( 'Gast', 'om-order-management' );
 			}
 			return strcasecmp( $da, $db );
 		} );
@@ -180,7 +180,7 @@ function om_page_complete_name() {
 	// expose customers for client-side export and load SheetJS
 	?>
 	<script type="text/javascript">
-		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\pqw-order-management\pages\complete-name.php */
+		/* filepath: c:\xampp\htdocs\wp\wp-content\plugins\om-order-management\pages\complete-name.php */
 		var om_export_customers = <?php echo wp_json_encode( $customers ); ?>;
 	</script>
 	<script src="<?php echo esc_url( plugin_dir_url( __FILE__ ) . '../assets/xlsx.full.min.js' ); ?>"></script>
@@ -218,8 +218,8 @@ function om_page_complete_name() {
 				var checkedKeys = {};
 				for (var i=0;i<checkedBoxes.length;i++){ checkedKeys[ checkedBoxes[i].value ] = true; }
 
-				// prefer new class, fallback to old pqw- class
-				var table = document.querySelector('.om-orders-table table') || document.querySelector('.pqw-orders-table table');
+				// prefer new class, fallback to old om- class
+				var table = document.querySelector('.om-orders-table table') || document.querySelector('.om-orders-table table');
 				if (!table) { alert('Keine Tabelle gefunden'); return; }
 
 				// build a minimal table clone that only contains rows for checked customers
@@ -234,7 +234,7 @@ function om_page_complete_name() {
 				for (var r = 0; r < rows.length; r++) {
 					var row = rows[r];
 					// support both old and new checkbox class names
-					var cb = row.querySelector('input.pqw-customer-checkbox') || row.querySelector('input.om-customer-checkbox');
+					var cb = row.querySelector('input.om-customer-checkbox') || row.querySelector('input.om-customer-checkbox');
  					if (cb) {
  						// this is the first row for a customer
  						var key = cb.value;
@@ -242,7 +242,7 @@ function om_page_complete_name() {
  							// include this row and all following rows until next customer row
  							tmpTbody.appendChild(row.cloneNode(true));
  							var s = r+1;
- 							while (s < rows.length && !rows[s].querySelector('input.pqw-customer-checkbox')) {
+ 							while (s < rows.length && !rows[s].querySelector('input.om-customer-checkbox')) {
  								tmpTbody.appendChild(rows[s].cloneNode(true));
  								s++;
  							}
@@ -250,7 +250,7 @@ function om_page_complete_name() {
  						} else {
  							// skip this customer block
  							var s2 = r+1;
- 							while (s2 < rows.length && !rows[s2].querySelector('input.pqw-customer-checkbox')) s2++;
+ 							while (s2 < rows.length && !rows[s2].querySelector('input.om-customer-checkbox')) s2++;
  							r = s2-1;
  						}
  					}
@@ -294,7 +294,7 @@ function om_page_complete_name() {
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
 	// changed: client-side export button (no form submit)
-	echo '<button type="button" id="om_export_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export XLSX', 'pqw-order-management' ) . '</button>';
+	echo '<button type="button" id="om_export_btn" class="button" style="margin-right:10px;">' . esc_html__( 'Export XLSX', 'om-order-management' ) . '</button>';
 	echo '<span class="description">Markierte Personen: alle Bestellungen/Artikel dieser Person werden abgeschlossen.</span>';
 	echo '</p>';
 
@@ -320,7 +320,7 @@ function om_page_complete_name() {
 		if ( $ln !== '' ) {
 			$display_name = $fn !== '' ? $ln . ', ' . $fn : $ln;
 		} else {
-			$display_name = $fn !== '' ? $fn : ( $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'pqw-order-management' ) );
+			$display_name = $fn !== '' ? $fn : ( $cust_data['email'] ? $cust_data['email'] : __( 'Gast', 'om-order-management' ) );
 		}
 
 		$items = isset( $cust_data['rows'] ) ? $cust_data['rows'] : array();
@@ -429,7 +429,7 @@ function om_page_complete_name() {
 			foreach ( $option_rows as $opt_text ) {
 				echo '<tr>';
 				if ( $first_customer_row ) {
-					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="pqw-customer-checkbox" /></td>';
+					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="om-customer-checkbox" /></td>';
 					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '">' . esc_html( $display_name ) . '</td>';
 					$email_val = isset( $cust_data['email'] ) ? $cust_data['email'] : '';
 					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="E-Mail">' . esc_html( $email_val ) . '</td>';
@@ -468,7 +468,7 @@ function om_page_complete_name() {
 			var selectAll = document.getElementById('om_select_all');
 			if (selectAll) {
 				selectAll.addEventListener('change', function(){
-					var checkboxes = document.querySelectorAll('input.pqw-customer-checkbox');
+					var checkboxes = document.querySelectorAll('input.om-customer-checkbox');
 					for (var i=0;i<checkboxes.length;i++){
 						checkboxes[i].checked = selectAll.checked;
 					}
@@ -478,7 +478,7 @@ function om_page_complete_name() {
 	</script>
 	<?php
 
-	// NEW: centered overlay + spinner and polling JS when pqw_complete_queued is present
+	// NEW: centered overlay + spinner and polling JS when om_complete_queued is present
 	if ( isset( $_GET['om_complete_queued'] ) && intval( $_GET['om_complete_queued'] ) > 0 ) :
 		$queued = intval( $_GET['om_complete_queued'] );
 		?>
@@ -488,25 +488,25 @@ function om_page_complete_name() {
 			var style = document.createElement('style');
 			style.type = 'text/css';
 			style.appendChild(document.createTextNode(
-				'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-				'#pqw_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-				'#pqw_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-				'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+				'#om_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+				'#om_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+				'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 			));
 			document.head.appendChild(style);
 
 			// create overlay element
 			var overlay = document.createElement('div');
-			overlay.id = 'pqw_complete_overlay';
+			overlay.id = 'om_complete_overlay';
 
 			var box = document.createElement('div');
-			box.id = 'pqw_complete_box';
+			box.id = 'om_complete_box';
 
 			var spinner = document.createElement('div');
-			spinner.className = 'pqw-spinner';
+			spinner.className = 'om-spinner';
 
 			var msg = document.createElement('div');
-			msg.id = 'pqw_complete_msg';
+			msg.id = 'om_complete_msg';
 			msg.style.textAlign = 'center';
 			msg.style.fontSize = '14px';
 			msg.style.color = '#222';
@@ -517,7 +517,7 @@ function om_page_complete_name() {
 			overlay.appendChild(box);
 			document.body.appendChild(overlay);
 
-			// remove pqw_complete_queued from URL so reload doesn't retrigger the overlay
+			// remove om_complete_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
 				u.searchParams.delete('om_complete_queued');
@@ -534,7 +534,7 @@ function om_page_complete_name() {
 						var res = JSON.parse(xhr.responseText);
 						if (res && res.success && res.data) {
 							var pending = parseInt(res.data.pending,10);
-							var msgEl = document.getElementById('pqw_complete_msg');
+							var msgEl = document.getElementById('om_complete_msg');
 							msgEl.textContent = 'Verbleibend: ' + pending;
 							if (pending > 0) {
 								setTimeout(checkStatus, 1500);
@@ -561,40 +561,40 @@ function om_page_complete_name() {
 	// Notices: show complete-queue notice if present
 	if ( isset( $_GET['om_complete_queued'] ) ) {
 		$cnt = absint( $_GET['om_complete_queued'] );
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Complete-Queue Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Complete-Queue Einträge angelegt.', 'om-order-management' ), $cnt ) ) . '</p></div>';
 	}
 
-	// Overlay JS: when using pqw_complete_queued, poll complete queue status (replace previous pqw_queue polling)
-	// ...wherever the overlay/polling JS is rendered, replace action=pqw_queue_status with action=pqw_complete_queue_status and remove pqw_complete_queued from URL similarly...
+	// Overlay JS: when using om_complete_queued, poll complete queue status (replace previous om_queue polling)
+	// ...wherever the overlay/polling JS is rendered, replace action=om_queue_status with action=om_complete_queue_status and remove om_complete_queued from URL similarly...
 
 	// NEW: ensure processing starts also when there are pending complete-queue entries (page load)
 	?>
 	<script type="text/javascript">
 		(function(){
 			// helper: create overlay if not present
-			function pqwCreateCompleteOverlay(initial){
-				if (document.getElementById('pqw_complete_overlay')) return;
+			function omCreateCompleteOverlay(initial){
+				if (document.getElementById('om_complete_overlay')) return;
 				var style = document.createElement('style');
 				style.type = 'text/css';
 				style.appendChild(document.createTextNode(
-					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
-					'#pqw_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
-					'#pqw_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-					'.pqw-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+					'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+					'#om_complete_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
+					'#om_complete_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
+					'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 				));
 				document.head.appendChild(style);
 
 				var overlay = document.createElement('div');
-				overlay.id = 'pqw_complete_overlay';
+				overlay.id = 'om_complete_overlay';
 
 				var box = document.createElement('div');
-				box.id = 'pqw_complete_box';
+				box.id = 'om_complete_box';
 
 				var spinner = document.createElement('div');
-				spinner.className = 'pqw-spinner';
+				spinner.className = 'om-spinner';
 
 				var msg = document.createElement('div');
-				msg.id = 'pqw_complete_msg';
+				msg.id = 'om_complete_msg';
 				msg.style.textAlign = 'center';
 				msg.style.fontSize = '14px';
 				msg.style.color = '#222';
@@ -606,7 +606,7 @@ function om_page_complete_name() {
 				document.body.appendChild(overlay);
 			}
 
-			function pqwRemoveQueryParam(param){
+			function omRemoveQueryParam(param){
 				try {
 					var u = new URL(window.location.href);
 					u.searchParams.delete(param);
@@ -614,7 +614,7 @@ function om_page_complete_name() {
 				} catch (e) { /* ignore */ }
 			}
 
-			function pqwCheckCompleteStatus(cb){
+			function omCheckCompleteStatus(cb){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
@@ -629,20 +629,20 @@ function om_page_complete_name() {
 				xhr.send('action=om_complete_queue_status');
 			}
 
-			function pqwTriggerCompleteProcessing(){
+			function omTriggerCompleteProcessing(){
 				var xhr = new XMLHttpRequest();
 				xhr.open('POST', ajaxurl);
 				xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
 				xhr.send('action=om_process_complete_queue_async');
 			}
 
-			function pqwStartCompletePolling(){
+			function omStartCompletePolling(){
 				(function poll(){
-					pqwCheckCompleteStatus(function(res){
+					omCheckCompleteStatus(function(res){
 						try {
 							if (res && res.success && res.data) {
 								var pending = parseInt(res.data.pending,10) || 0;
-								var msgEl = document.getElementById('pqw_complete_msg');
+								var msgEl = document.getElementById('om_complete_msg');
 								if (msgEl) msgEl.textContent = 'Verbleibend: ' + pending;
 								if (pending > 0) {
 									setTimeout(poll, 1500);
@@ -663,18 +663,18 @@ function om_page_complete_name() {
 
 			// On load: check whether there are pending entries and if so start processing+polling
 			document.addEventListener('DOMContentLoaded', function(){
-				// avoid double-running if user already triggered via pqw_complete_queued flow
-				if (document.getElementById('pqw_complete_overlay')) return;
-				pqwCheckCompleteStatus(function(res){
+				// avoid double-running if user already triggered via om_complete_queued flow
+				if (document.getElementById('om_complete_overlay')) return;
+				omCheckCompleteStatus(function(res){
 					if (res && res.success && res.data) {
 						var pending = parseInt(res.data.pending,10) || 0;
 						if (pending > 0) {
-							pqwCreateCompleteOverlay(pending);
-							pqwRemoveQueryParam('om_complete_queued');
+							omCreateCompleteOverlay(pending);
+							omRemoveQueryParam('om_complete_queued');
 							// trigger server-side async processing once and start polling
-							pqwTriggerCompleteProcessing();
+							omTriggerCompleteProcessing();
 							// small delay to let server start
-							setTimeout(pqwStartCompletePolling, 700);
+							setTimeout(omStartCompletePolling, 700);
 						}
 					}
 				});

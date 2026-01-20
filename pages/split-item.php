@@ -13,22 +13,22 @@ function om_page_split_item() {
 	global $order_management;
 
 	$mode = 'split_item';
-	$button_label = __( 'Bestellungen weiterverarbeiten (Artikel)', 'pqw-order-management' );
+	$button_label = __( 'Bestellungen weiterverarbeiten (Artikel)', 'om-order-management' );
 	$nonce_action  = 'om_action_' . $mode;
 
 	// Handle POST
 	if ( 'POST' === $_SERVER['REQUEST_METHOD'] && isset( $_POST['om_subpage'] ) && $_POST['om_subpage'] === $mode ) {
 		if ( ! ( current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) ) {
-			wp_die( __( 'Nicht autorisiert', 'pqw-order-management' ) );
+			wp_die( __( 'Nicht autorisiert', 'om-order-management' ) );
 		}
 		if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), $nonce_action ) ) {
-			wp_die( __( 'Nonce ungültig', 'pqw-order-management' ) );
+			wp_die( __( 'Nonce ungültig', 'om-order-management' ) );
 		}
 
 		$items = isset( $_POST['items'] ) ? (array) wp_unslash( $_POST['items'] ) : array();
 		$items = array_filter( array_unique( array_map( 'strval', $items ) ) );
 		if ( empty( $items ) ) {
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_updated' => 0 ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
@@ -85,7 +85,7 @@ function om_page_split_item() {
 		}
 
 		if ( empty( $by_order ) ) {
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_updated' => 0 ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
@@ -98,7 +98,7 @@ function om_page_split_item() {
 			}
 		}
 		$inserted = $order_management->queue_rows( $rows );
-		$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'pqw_queued' => $inserted ), admin_url( 'admin.php' ) );
+		$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_queued' => $inserted ), admin_url( 'admin.php' ) );
 		wp_safe_redirect( $redirect );
 		exit;
 	}
@@ -108,17 +108,17 @@ function om_page_split_item() {
 	echo '<h1>' . esc_html( $button_label ) . '</h1>';
 
 	// Notices
-	if ( isset( $_GET['pqw_updated'] ) ) {
-		$cnt = absint( $_GET['pqw_updated'] );
+	if ( isset( $_GET['om_updated'] ) ) {
+		$cnt = absint( $_GET['om_updated'] );
 		if ( $cnt > 0 ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Artikel erfolgreich aufgesplittet.', 'pqw-order-management' ) . '</p></div>';
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Artikel erfolgreich aufgesplittet.', 'om-order-management' ) . '</p></div>';
 		} else {
-			echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Keine Artikel verarbeitet oder Fehler.', 'pqw-order-management' ) . '</p></div>';
+			echo '<div class="notice notice-info is-dismissible"><p>' . esc_html__( 'Keine Artikel verarbeitet oder Fehler.', 'om-order-management' ) . '</p></div>';
 		}
 	}
-	if ( isset( $_GET['pqw_queued'] ) ) {
-		$cnt = absint( $_GET['pqw_queued'] );
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'pqw-order-management' ), $cnt ) ) . '</p></div>';
+	if ( isset( $_GET['om_queued'] ) ) {
+		$cnt = absint( $_GET['om_queued'] );
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( '%d Queue-Einträge angelegt.', 'om-order-management' ), $cnt ) ) . '</p></div>';
 	}
 
 	// Check WooCommerce
@@ -216,11 +216,11 @@ function om_page_split_item() {
 
 	echo '<p>';
 	echo '<button type="submit" class="button button-primary" style="margin-right:10px;">' . esc_html( $button_label ) . '</button>';
-	echo '<span class="descr//iption">' . esc_html__( 'Markierte Artikel werden aus ihren Bestellungen ausgegliedert und in neue Bestellungen verschoben (pro Original-Bestellung).', 'pqw-order-management' ) . '</span>';
+	echo '<span class="descr//iption">' . esc_html__( 'Markierte Artikel werden aus ihren Bestellungen ausgegliedert und in neue Bestellungen verschoben (pro Original-Bestellung).', 'om-order-management' ) . '</span>';
 	echo '</p>';
 
 	// Table header (aggregated view) — no order column
-	echo '<div class="pqw-orders-table"><div class="table-responsive">';
+	echo '<div class="om-orders-table"><div class="table-responsive">';
 	echo '<table class="table table-striped table-bordered">';
 	echo '<thead class="table-dark"><tr>';
 	echo '<th scope="col"><input type="checkbox" id="om_select_all_items" aria-label="Alle auswählen" /></th>';
@@ -401,7 +401,7 @@ function om_page_split_item() {
  			}
 
 			function exportTableToXlsx(filename){
-				var table = document.querySelector('.pqw-orders-table table');
+				var table = document.querySelector('.om-orders-table table');
 				if (!table) { alert('Keine Tabelle gefunden'); return; }
 				var clone = table.cloneNode(true);
 				var inputs = clone.querySelectorAll('input,select,textarea');
@@ -424,7 +424,7 @@ function om_page_split_item() {
 				}
 			}
 
-			var expBtn = document.getElementById('pqw_export_xlsx');
+			var expBtn = document.getElementById('om_export_xlsx');
 			if (expBtn){
 				expBtn.addEventListener('click', function(){
 					loadSheetJS(function(){
@@ -443,7 +443,7 @@ function om_page_split_item() {
 							var tzM = pad(Math.abs(tz) % 60);
 							return y + '-' + m + '-' + day + '_' + hh + '-' + mm + '-' + ss + '_' + sign + tzH + tzM;
 						}
-						var fname = 'pqw-split-item-' + localDateStamp(d) + '.xlsx';
+						var fname = 'om-split-item-' + localDateStamp(d) + '.xlsx';
 						exportTableToXlsx(fname);
 					});
 				});
@@ -459,10 +459,10 @@ function om_page_split_item() {
 				var style = document.createElement('style');
 				style.type = 'text/css';
 				style.appendChild(document.createTextNode(
-					'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+					'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
 					'#om_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
 					'#om_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-					'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+					'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 				));
 				document.head.appendChild(style);
 
@@ -545,7 +545,7 @@ function om_page_split_item() {
 
 			// Beim Laden prüfen, ob Queue Einträge hat -> Overlay + Trigger + Polling starten
 			document.addEventListener('DOMContentLoaded', function(){
-				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?pqw_queued)
+				// nicht doppelt starten, falls bereits Overlay vorhanden (z.B. durch ?om_queued)
 				if (document.getElementById('om_queue_overlay')) return;
 				omCheckQueueStatus(function(res){
 					if (res && res.success && res.data) {
@@ -566,7 +566,7 @@ function om_page_split_item() {
 	<?php
 
 
-	// After the form output add centered overlay + spinner and polling JS when pqw_queued is present:
+	// After the form output add centered overlay + spinner and polling JS when om_queued is present:
 	if ( isset( $_GET['om_queued'] ) && intval( $_GET['om_queued'] ) > 0 ) :
 		$queued = intval( $_GET['om_queued'] );
 		?>
@@ -576,10 +576,10 @@ function om_page_split_item() {
 			var style = document.createElement('style');
 			style.type = 'text/css';
 			style.appendChild(document.createTextNode(
-				'@keyframes pqw-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
+				'@keyframes om-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}' +
 				'#om_queue_overlay{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,0.45);}' +
 				'#om_queue_box{background:#fff;padding:20px 26px;border-radius:8px;display:flex;flex-direction:column;align-items:center;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}' +
-				'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:pqw-spin 1s linear infinite;margin-bottom:12px;}'
+				'.om-spinner{width:48px;height:48px;border:4px solid #e6e6e6;border-top-color:#007cba;border-radius:50%;animation:om-spin 1s linear infinite;margin-bottom:12px;}'
 			));
 			document.head.appendChild(style);
 
@@ -605,7 +605,7 @@ function om_page_split_item() {
 			overlay.appendChild(box);
 			document.body.appendChild(overlay);
 
-			// remove pqw_queued from URL so reload doesn't retrigger the overlay
+			// remove om_queued from URL so reload doesn't retrigger the overlay
 			try {
 				var u = new URL(window.location.href);
 				u.searchParams.delete('om_queued');
@@ -628,7 +628,7 @@ function om_page_split_item() {
 								setTimeout(checkStatus, 1500);
 							} else {
 								msgEl.textContent = 'Abarbeitung abgeschlossen.';
-								// nach kurzer Verzögerung die Seite neu laden (ohne pqw_queued)
+								// nach kurzer Verzögerung die Seite neu laden (ohne om_queued)
 								setTimeout(function(){
 									window.location.reload();
 								}, 1000);

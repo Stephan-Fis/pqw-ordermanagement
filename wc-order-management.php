@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Order_Management {
 
-	const VERSION = '1.13.1-260120_20';
+	const VERSION = '1.13.1-260128-10';
 	const PLUGIN_SLUG = 'woocommerce-order-management';
 
 	// Store main menu hook suffix

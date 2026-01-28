@@ -60,7 +60,7 @@ function om_page_complete_name() {
 
 	// Check WooCommerce
 	if ( ! class_exists( 'WooCommerce' ) ) {
-		echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> PQW Order-Management benötigt WooCommerce.</p></div>';
+		echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> Order-Management benötigt WooCommerce.</p></div>';
 		echo '</div>';
 		return;
 	}

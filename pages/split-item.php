@@ -28,7 +28,7 @@ function om_page_split_item() {
 		$items = isset( $_POST['items'] ) ? (array) wp_unslash( $_POST['items'] ) : array();
 		$items = array_filter( array_unique( array_map( 'strval', $items ) ) );
 		if ( empty( $items ) ) {
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
@@ -85,7 +85,7 @@ function om_page_split_item() {
 		}
 
 		if ( empty( $by_order ) ) {
-			$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
+			$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_updated' => 0 ), admin_url( 'admin.php' ) );
 			wp_safe_redirect( $redirect );
 			exit;
 		}
@@ -98,7 +98,7 @@ function om_page_split_item() {
 			}
 		}
 		$inserted = $order_management->queue_rows( $rows );
-		$redirect = add_query_arg( array( 'page' => PQW_Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_queued' => $inserted ), admin_url( 'admin.php' ) );
+		$redirect = add_query_arg( array( 'page' => Order_Management::PLUGIN_SLUG . '_' . $mode, 'om_queued' => $inserted ), admin_url( 'admin.php' ) );
 		wp_safe_redirect( $redirect );
 		exit;
 	}
@@ -123,7 +123,7 @@ function om_page_split_item() {
 
 	// Check WooCommerce
 	if ( ! class_exists( 'WooCommerce' ) ) {
-		echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> PQW Order-Management benötigt WooCommerce.</p></div>';
+		echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> Order-Management benötigt WooCommerce.</p></div>';
 		echo '</div>';
 		return;
 	}

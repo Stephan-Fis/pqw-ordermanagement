@@ -239,7 +239,7 @@ class Order_Management {
 					foreach ( $order_ids as $oid ) {
 						$order = wc_get_order( $oid );
 						if ( $order && $target_status !== $order->get_status() ) {
-							$order->update_status( $target_status, sprintf( __( 'Status via PQW Order-Management (%s) gesetzt', 'om-order-management' ), $mode ) );
+							$order->update_status( $target_status, sprintf( __( 'Status via Order-Management (%s) gesetzt', 'om-order-management' ), $mode ) );
 							$updated++;
 						}
 					}
@@ -291,7 +291,7 @@ class Order_Management {
 
 		// Check Woocommerce
 		if ( ! class_exists( 'WooCommerce' ) ) {
-			echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> PQW Order-Management benötigt WooCommerce.</p></div>';
+			echo '<div class="notice notice-warning"><p><strong>WooCommerce nicht aktiv.</strong> Order-Management benötigt WooCommerce.</p></div>';
 			echo '</div>';
 			return;
 		}
@@ -862,7 +862,7 @@ class Order_Management {
 					$ord = wc_get_order( $order_id );
 					if ( $ord ) {
 						if ( 'on-hold' !== $ord->get_status() ) {
-							$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (selected)', 'om-order-management' ) );
+							$ord->update_status( 'on-hold', __( 'Status via Order-Management (selected)', 'om-order-management' ) );
 						}
 						$items = $ord->get_items();
 						if ( empty( $items ) ) {
@@ -905,7 +905,7 @@ class Order_Management {
 						}
 					} else {
 						if ( 'completed' !== $ord->get_status() ) {
-							$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (selected)', 'om-order-management' ) );
+							$ord->update_status( 'completed', __( 'Abgeschlossen via Order-Management (selected)', 'om-order-management' ) );
 						}
 					}
 				}
@@ -1085,7 +1085,7 @@ class Order_Management {
 			if ( 0.0 >= $new_total ) {
 				$new_order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'om-order-management' ) );
 			} else {
-				$new_order->update_status( 'on-hold', __( 'Aufgesplittet via PQW Order-Management', 'om-order-management' ) );
+				$new_order->update_status( 'on-hold', __( 'Aufgesplittet via Order-Management', 'om-order-management' ) );
 			}
 
 			$moved_count++;
@@ -1107,7 +1107,7 @@ class Order_Management {
 			if ( 0.0 >= $orig_total ) {
 				$order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'om-order-management' ) );
 			} else {
-				$order->add_order_note( __( 'Positionen ausgegliedert via PQW Order-Management', 'om-order-management' ) );
+				$order->add_order_note( __( 'Positionen ausgegliedert via Order-Management', 'om-order-management' ) );
 				$order->save();
 			}
 		}
@@ -1168,7 +1168,7 @@ function om_activation_check_requirements() {
 	if ( ! empty( $missing ) ) {
 		// prevent activation
 		deactivate_plugins( plugin_basename( __FILE__ ) );
-		wp_die( sprintf( __( 'PQW Order-Management konnte nicht aktiviert werden. Fehlende Abhängigkeiten: %s. Bitte installieren/aktivieren Sie zuerst diese Plugins.', 'om-order-management' ), implode( ', ', $missing ) ), '', array( 'back_link' => true ) );
+		wp_die( sprintf( __( 'Order-Management konnte nicht aktiviert werden. Fehlende Abhängigkeiten: %s. Bitte installieren/aktivieren Sie zuerst diese Plugins.', 'om-order-management' ), implode( ', ', $missing ) ), '', array( 'back_link' => true ) );
 	}
 }
 register_activation_hook( __FILE__, 'om_activation_check_requirements' );
@@ -1185,7 +1185,7 @@ function om_admin_dependency_notice() {
 	if ( ! $req['woocommerce'] ) $missing[] = 'WooCommerce';
 	if ( ! $req['ppom'] ) $missing[] = 'PPOM for WooCommerce';
 	if ( ! empty( $missing ) ) {
-		echo '<div class="notice notice-error"><p><strong>PQW Order-Management:</strong> Diese Erweiterung benötigt: ' . esc_html( implode( ', ', $missing ) ) . '. Bitte installieren/aktivieren Sie diese Plugins.</p></div>';
+		echo '<div class="notice notice-error"><p><strong>Order-Management:</strong> Diese Erweiterung benötigt: ' . esc_html( implode( ', ', $missing ) ) . '. Bitte installieren/aktivieren Sie diese Plugins.</p></div>';
 	}
 }
 add_action( 'admin_notices', 'om_admin_dependency_notice' );
@@ -1237,7 +1237,7 @@ if ( ! function_exists( 'om_process_queue_handler' ) ) {
 				$ord = wc_get_order( $order_id );
 				if ( $ord ) {
 					if ( 'on-hold' !== $ord->get_status() ) {
-						$ord->update_status( 'on-hold', __( 'Status via PQW Order-Management (Queue) gesetzt', 'om-order-management' ) );
+						$ord->update_status( 'on-hold', __( 'Status via Order-Management (Queue) gesetzt', 'om-order-management' ) );
 					}
 					// If this order has no items, cancel it
 					$items = $ord->get_items();
@@ -1315,7 +1315,7 @@ if ( ! function_exists( 'om_process_complete_queue_handler' ) ) {
 				} else {
 					// normal case: complete if not already
 					if ( 'completed' !== $ord->get_status() ) {
-						$ord->update_status( 'completed', __( 'Abgeschlossen via PQW Order-Management (Queue)', 'om-order-management' ) );
+						$ord->update_status( 'completed', __( 'Abgeschlossen via Order-Management (Queue)', 'om-order-management' ) );
 					}
 				}
 			}

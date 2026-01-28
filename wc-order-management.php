@@ -3,7 +3,7 @@
  * Plugin Name: Woocommerce Order-Management
  * Plugin URI:  https://fischer-it.eu/wp-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.13.1-260120_20
+ * Version:     1.13.1-260128-10
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: woocommerce-order-management

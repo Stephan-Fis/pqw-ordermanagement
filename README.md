@@ -64,6 +64,14 @@ Das Plugin liefert eine responsive Admin-Oberfläche (Bootstrap) zum Verwalten v
 
 ## Changelog
 
+- 1.14.0-261019-12
+  - Offene Jobs: Auswahl wird pro Queue-Tabelle ausgewertet (vorher wurden IDs beider Queues vermischt)
+  - Beim Aufteilen werden keine WooCommerce-Mails mehr verschickt (wartend, neue Bestellung, storniert)
+  - Originalbestellung wird nur storniert, wenn alle Positionen ausgegliedert wurden; 0-€-Bestellungen werden nicht mehr automatisch storniert
+  - Queue-Verarbeitung über den Browser (gemeinsames Skript `assets/om-queue.js`) statt defektem Loopback-Request; WP-Cron bleibt als Fallback
+  - Overlay ausblendbar, Hinweis bei stockender Verarbeitung
+  - Fehlgeschlagene Einträge erhalten Status `error` statt dauerhaft `pending`
+  - Sperre (MySQL `GET_LOCK`) gegen parallele Verarbeitung derselben Queue
 - 1.13.1-260120_20
   - Variant-Parent-Fallback implementiert
   - Deduplizierung leerer/duplizierter Option-Zeilen

@@ -24,7 +24,7 @@ function om_page_current_jobs() {
     $complete_rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, order_id, order_item_id, status, created_at FROM {$table_complete} WHERE status != %s ORDER BY created_at DESC", 'done' ), ARRAY_A );
 
     // Renderer helper
-    $render_table = function( $rows, $title ) {
+    $render_table = function( $rows, $title, $queue ) {
         echo '<h2>' . esc_html( $title ) . '</h2>';
         if ( empty( $rows ) ) {
             echo '<p>' . esc_html__( 'Keine Einträge.', 'om-order-management' ) . '</p>';
@@ -96,7 +96,7 @@ function om_page_current_jobs() {
             }
 
             echo '<tr>';
-            echo '<td><input type="checkbox" class="om-job-checkbox" name="selected[]" value="' . intval( $r['id'] ) . '" /></td>';
+            echo '<td><input type="checkbox" class="om-job-checkbox om-job-checkbox-' . esc_attr( $queue ) . '" name="selected[]" value="' . intval( $r['id'] ) . '" /></td>';
             echo '<td>' . intval( $r['id'] ) . '</td>';
             echo '<td>' . $order_link . '</td>';
             echo '<td>' . esc_html( $prod_name ) . '</td>';
@@ -110,7 +110,7 @@ function om_page_current_jobs() {
     };
 
     // render split queue table
-    $render_table( $split_rows, __( 'Weiterverarbeitungs-Queue', 'om-order-management' ) );
+    $render_table( $split_rows, __( 'Weiterverarbeitungs-Queue', 'om-order-management' ), 'split' );
     echo '<div style="margin-top:.5rem;margin-bottom:1.5rem;">';
     echo '<button id="om_process_selected_split" class="button button-primary" data-queue="split">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'om-order-management' ) . '</button>';
     echo '<div id="om_confirm_split" style="display:none;margin-top:.5rem;">';
@@ -125,7 +125,7 @@ function om_page_current_jobs() {
     echo '</div>';
 
     // render complete queue table
-    $render_table( $complete_rows, __( 'Abschluss-Queue', 'om-order-management' ) );
+    $render_table( $complete_rows, __( 'Abschluss-Queue', 'om-order-management' ), 'complete' );
     echo '<div style="margin-top:.5rem;">';
     echo '<button id="om_process_selected_complete" class="button button-primary" data-queue="complete">' . esc_html__( 'Ausgewählte Jobs abarbeiten', 'om-order-management' ) . '</button>';
     echo '<div id="om_confirm_complete" style="display:none;margin-top:.5rem;">';
@@ -148,8 +148,8 @@ function om_page_current_jobs() {
     (function(){
         var currentXhr = { split:null, complete:null };
 
-        function collectSelected() {
-            var nodes = document.querySelectorAll('.om-job-checkbox:checked');
+        function collectSelected(queue) {
+            var nodes = document.querySelectorAll('.om-job-checkbox-' + queue + ':checked');
             var ids = [];
             nodes.forEach(function(n){ ids.push(n.value); });
             return ids;
@@ -187,7 +187,7 @@ function om_page_current_jobs() {
         }
 
         function showConfirmation(queue){
-            var ids = collectSelected();
+            var ids = collectSelected(queue);
             if (!ids.length) { alert('Keine Einträge ausgewählt.'); return; }
             var container = document.getElementById('om_confirm_' + queue);
             var text = document.getElementById('om_confirm_' + queue + '_text');
@@ -212,7 +212,7 @@ function om_page_current_jobs() {
                 var ok = document.getElementById('om_confirm_' + queue + '_ok');
                 var cancel = document.getElementById('om_confirm_' + queue + '_cancel');
                 var processingCancel = document.getElementById('om_processing_' + queue + '_cancel');
-                if (ok) ok.addEventListener('click', function(){ var ids = collectSelected(); hideConfirmation(queue); sendSelected(queue, ids); });
+                if (ok) ok.addEventListener('click', function(){ var ids = collectSelected(queue); hideConfirmation(queue); sendSelected(queue, ids); });
                 if (cancel) cancel.addEventListener('click', function(){ hideConfirmation(queue); });
                 if (processingCancel) processingCancel.addEventListener('click', function(){ var x = currentXhr[queue]; if (x) { x.abort(); currentXhr[queue] = null; document.getElementById('om_processing_' + queue).style.display = 'none'; document.getElementById('om_process_selected_' + queue).disabled = false; alert('Verarbeitung abgebrochen.'); } });
             });

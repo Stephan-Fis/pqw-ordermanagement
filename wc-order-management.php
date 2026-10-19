@@ -3,7 +3,7 @@
  * Plugin Name: Woocommerce Order-Management
  * Plugin URI:  https://fischer-it.eu/wp-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.13.1-260128-10
+ * Version:     1.14.0-261019-12
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: woocommerce-order-management
@@ -16,13 +16,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Order_Management {
 
-	const VERSION = '1.13.1-260128-10';
+	const VERSION = '1.14.0-261019-12';
 	const PLUGIN_SLUG = 'woocommerce-order-management';
 
 	// Store main menu hook suffix
 	protected $menu_hook = '';
 
+	// Order IDs (as keys) for which WooCommerce emails are suppressed during this request
+	protected $mail_suppressed_orders = array();
+
+	// WooCommerce email IDs that may fire while splitting orders
+	const SUPPRESSED_EMAILS = array( 'new_order', 'customer_on_hold_order', 'cancelled_order', 'customer_cancelled_order' );
+
 	public function __construct() {
+		// Suppress WooCommerce emails for orders created/changed by the split process
+		foreach ( self::SUPPRESSED_EMAILS as $email_id ) {
+			add_filter( 'woocommerce_email_enabled_' . $email_id, array( $this, 'filter_suppressed_email' ), 999, 2 );
+		}
+
 		// Enqueue only on our admin page(s)
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue' ) );
 
@@ -70,6 +81,24 @@ class Order_Management {
 			array(),
 			'5.3.2'
 		);
+
+		// Queue overlay + processing on the action pages (not on "Offene Jobs")
+		$queue = '';
+		if ( false !== strpos( $hook, self::PLUGIN_SLUG . '_split_' ) ) {
+			$queue = 'split';
+		} elseif ( false !== strpos( $hook, self::PLUGIN_SLUG . '_complete_' ) ) {
+			$queue = 'complete';
+		}
+		if ( $queue ) {
+			wp_enqueue_script( 'om-queue', plugin_dir_url( __FILE__ ) . 'assets/om-queue.js', array(), self::VERSION, true );
+			wp_localize_script( 'om-queue', 'omQueue', array(
+				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+				'statusAction'  => 'split' === $queue ? 'om_queue_status' : 'om_complete_queue_status',
+				'processAction' => 'split' === $queue ? 'om_process_queue_async' : 'om_process_complete_queue_async',
+				'nonce'         => wp_create_nonce( 'split' === $queue ? 'om_process_queue' : 'om_process_complete_queue' ),
+				'jobsUrl'       => admin_url( 'admin.php?page=' . self::PLUGIN_SLUG . '_current_jobs' ),
+			) );
+		}
 
 		// Optional small admin styles for spacing and responsive behaviour
 		wp_add_inline_style( 'om-bootstrap', '
@@ -691,19 +720,9 @@ class Order_Management {
 		}
 
 		// schedule wp-cron fallback if not scheduled
+		// (primary processing is driven by assets/om-queue.js on the redirected page)
 		if ( $inserted > 0 && ! wp_next_scheduled( 'om_process_queue' ) ) {
 			wp_schedule_single_event( time() + 5, 'om_process_queue' );
-		}
-
-		// Trigger background processing via non-blocking admin-ajax call
-		if ( $inserted > 0 ) {
-			$ajax_url = admin_url( 'admin-ajax.php' );
-			$body = array(
-				'action' => 'om_process_queue_async',
-				'nonce'  => wp_create_nonce( 'om_process_queue' ),
-			);
-			// non-blocking
-			wp_remote_post( $ajax_url, array( 'body' => $body, 'timeout' => 0.01, 'blocking' => false ) );
 		}
 
 		return $inserted;
@@ -754,19 +773,9 @@ class Order_Management {
 		}
 
 		// schedule wp-cron fallback if not scheduled
+		// (primary processing is driven by assets/om-queue.js on the redirected page)
 		if ( $inserted > 0 && ! wp_next_scheduled( 'om_process_complete_queue' ) ) {
 			wp_schedule_single_event( time() + 5, 'om_process_complete_queue' );
-		}
-
-		// Trigger background processing via non-blocking admin-ajax call (same approach as split)
-		if ( $inserted > 0 ) {
-			$ajax_url = admin_url( 'admin-ajax.php' );
-			$body = array(
-				'action' => 'om_process_complete_queue_async',
-				'nonce'  => wp_create_nonce( 'om_process_complete_queue' ),
-			);
-			// non-blocking
-			wp_remote_post( $ajax_url, array( 'body' => $body, 'timeout' => 0.01, 'blocking' => false ) );
 		}
 
 		return $inserted;
@@ -822,32 +831,76 @@ class Order_Management {
 		$ids = array_map( 'intval', $ids );
 		$queue = isset( $_REQUEST['queue'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['queue'] ) ) : '';
 
-		global $wpdb, $order_management;
+		global $wpdb;
 		if ( empty( $ids ) || ! in_array( $queue, array( 'split', 'complete' ), true ) ) {
 			wp_send_json_error( 'invalid', 400 );
 		}
 
+		$lock = $queue === 'split' ? 'om_split_queue' : 'om_complete_queue';
+		if ( ! $this->acquire_lock( $lock ) ) {
+			wp_send_json_error( 'Die Queue wird gerade verarbeitet. Bitte in einigen Sekunden erneut versuchen.', 409 );
+		}
+
 		$table = $wpdb->prefix . ( $queue === 'split' ? 'om_order_queue' : 'om_order_complete_queue' );
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-		$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($placeholders)", $ids );
+		// skip entries that were already processed in the meantime
+		$sql = $wpdb->prepare( "SELECT * FROM {$table} WHERE id IN ($placeholders) AND status != %s", array_merge( $ids, array( 'done' ) ) );
 		$rows = $wpdb->get_results( $sql );
 		if ( empty( $rows ) ) {
+			$this->release_lock( $lock );
 			wp_send_json_error( 'notfound', 404 );
 		}
 
-		$processed = 0;
 		if ( $queue === 'split' ) {
-			// group by order_id
-			$grouped = array();
-			foreach ( $rows as $r ) {
-				$oid = intval( $r->order_id );
-				if ( ! isset( $grouped[ $oid ] ) ) {
-					$grouped[ $oid ] = array();
-				}
-				$grouped[ $oid ][] = $r;
-			}
+			$processed = $this->process_split_queue_rows( $rows, $table );
+		} else {
+			$processed = $this->process_complete_queue_rows( $rows, $table );
+		}
+		$this->release_lock( $lock );
 
-			foreach ( $grouped as $order_id => $entries ) {
+		wp_send_json_success( array( 'processed' => $processed ) );
+	}
+
+	/**
+	 * Acquire a non-blocking MySQL named lock (released automatically if the request dies).
+	 */
+	public function acquire_lock( $name ) {
+		global $wpdb;
+		return '1' === (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $wpdb->prefix . $name ) );
+	}
+
+	public function release_lock( $name ) {
+		global $wpdb;
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $wpdb->prefix . $name ) );
+	}
+
+	/**
+	 * Set status of queue entries ('done' or 'error').
+	 */
+	protected function mark_queue_entries( $table, $ids, $status ) {
+		global $wpdb;
+		$ids = array_map( 'intval', (array) $ids );
+		if ( empty( $ids ) ) {
+			return;
+		}
+		$place = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$wpdb->query( $wpdb->prepare( "UPDATE {$table} SET status = %s, processed_at = %s WHERE id IN ($place)", array_merge( array( $status, current_time( 'mysql', 1 ) ), $ids ) ) );
+	}
+
+	/**
+	 * Process split-queue rows (grouped per order). Failing orders are marked 'error'
+	 * instead of staying 'pending' forever. Returns number of processed entries.
+	 */
+	public function process_split_queue_rows( $rows, $table ) {
+		$grouped = array();
+		foreach ( $rows as $r ) {
+			$grouped[ intval( $r->order_id ) ][] = $r;
+		}
+
+		$processed = 0;
+		foreach ( $grouped as $order_id => $entries ) {
+			$entry_ids = wp_list_pluck( $entries, 'id' );
+			try {
 				$item_ids = array();
 				foreach ( $entries as $e ) {
 					if ( ! empty( $e->order_item_id ) ) {
@@ -855,66 +908,76 @@ class Order_Management {
 					}
 				}
 
-				if ( ! empty( $item_ids ) && isset( $order_management ) ) {
-					$order_management->split_order_items( $order_id, $item_ids );
+				if ( ! empty( $item_ids ) ) {
+					$this->split_order_items( $order_id, $item_ids );
 				} else {
-					// fallback: set order on-hold or cancel as in handler
+					// fallback: no item ids -> set whole order on-hold (cancel only if it has no items)
 					$ord = wc_get_order( $order_id );
 					if ( $ord ) {
-						if ( 'on-hold' !== $ord->get_status() ) {
-							$ord->update_status( 'on-hold', __( 'Status via Order-Management (selected)', 'om-order-management' ) );
-						}
-						$items = $ord->get_items();
-						if ( empty( $items ) ) {
+						$this->suppress_order_emails( $order_id );
+						if ( empty( $ord->get_items() ) ) {
 							if ( 'cancelled' !== $ord->get_status() ) {
 								$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'om-order-management' ) );
 							}
-						} else {
-							$ord_total = floatval( $ord->get_total() );
-							if ( 0.0 >= $ord_total ) {
-								if ( 'cancelled' !== $ord->get_status() ) {
-									$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'om-order-management' ) );
-								}
-							}
+						} elseif ( 'on-hold' !== $ord->get_status() ) {
+							$ord->update_status( 'on-hold', __( 'Status via Order-Management (Queue) gesetzt', 'om-order-management' ) );
 						}
 					}
 				}
-				// mark these entries done
-				$ids_local = wp_list_pluck( $entries, 'id' );
-				if ( ! empty( $ids_local ) ) {
-					$place = implode( ',', array_fill( 0, count( $ids_local ), '%d' ) );
-					$wpdb->query( $wpdb->prepare( "UPDATE {$table} SET status = %s, processed_at = %s WHERE id IN ($place)", array_merge( array( 'done', current_time( 'mysql', 1 ) ), $ids_local ) ) );
-					$processed += count( $ids_local );
-				}
+				$this->mark_queue_entries( $table, $entry_ids, 'done' );
+			} catch ( Throwable $e ) {
+				error_log( sprintf( '[Order-Management] Split von Bestellung #%d fehlgeschlagen: %s', $order_id, $e->getMessage() ) );
+				$this->mark_queue_entries( $table, $entry_ids, 'error' );
 			}
+			$processed += count( $entry_ids );
+		}
+		return $processed;
+	}
 
-		} else {
-			// complete queue: iterate rows and complete orders
-			foreach ( $rows as $r ) {
+	/**
+	 * Process complete-queue rows. Orders without items are cancelled, all others completed.
+	 * Returns number of processed entries.
+	 */
+	public function process_complete_queue_rows( $rows, $table ) {
+		$processed = 0;
+		foreach ( $rows as $r ) {
+			try {
 				$ord = wc_get_order( intval( $r->order_id ) );
 				if ( $ord ) {
-					$items = $ord->get_items();
-					$ord_total = floatval( $ord->get_total() );
-					if ( empty( $items ) ) {
+					if ( empty( $ord->get_items() ) ) {
+						// no items -> cancel to keep history
 						if ( 'cancelled' !== $ord->get_status() ) {
 							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'om-order-management' ) );
 						}
-					} elseif ( 0.0 >= $ord_total ) {
-						if ( 'cancelled' !== $ord->get_status() ) {
-							$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'om-order-management' ) );
-						}
-					} else {
-						if ( 'completed' !== $ord->get_status() ) {
-							$ord->update_status( 'completed', __( 'Abgeschlossen via Order-Management (selected)', 'om-order-management' ) );
-						}
+					} elseif ( 'completed' !== $ord->get_status() ) {
+						$ord->update_status( 'completed', __( 'Abgeschlossen via Order-Management (Queue)', 'om-order-management' ) );
 					}
 				}
-				$wpdb->update( $table, array( 'status' => 'done', 'processed_at' => current_time( 'mysql', 1 ) ), array( 'id' => intval( $r->id ) ), array( '%s', '%s' ), array( '%d' ) );
-				$processed++;
+				$this->mark_queue_entries( $table, $r->id, 'done' );
+			} catch ( Throwable $e ) {
+				error_log( sprintf( '[Order-Management] Abschluss von Bestellung #%d fehlgeschlagen: %s', $r->order_id, $e->getMessage() ) );
+				$this->mark_queue_entries( $table, $r->id, 'error' );
 			}
+			$processed++;
 		}
+		return $processed;
+	}
 
-		wp_send_json_success( array( 'processed' => $processed ) );
+	/**
+	 * Mark an order so WooCommerce emails listed in SUPPRESSED_EMAILS are not sent for it in this request.
+	 */
+	public function suppress_order_emails( $order_id ) {
+		$this->mail_suppressed_orders[ intval( $order_id ) ] = true;
+	}
+
+	/**
+	 * Filter callback for woocommerce_email_enabled_{id}.
+	 */
+	public function filter_suppressed_email( $enabled, $object = null ) {
+		if ( $object instanceof WC_Order && isset( $this->mail_suppressed_orders[ $object->get_id() ] ) ) {
+			return false;
+		}
+		return $enabled;
 	}
 
 	/**
@@ -1080,13 +1143,9 @@ class Order_Management {
 			// remove item from original order
 			$order->remove_item( $iid );
 
-			// If new order total is 0 => cancel it automatically, otherwise set to on-hold
-			$new_total = floatval( $new_order->get_total() );
-			if ( 0.0 >= $new_total ) {
-				$new_order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'om-order-management' ) );
-			} else {
-				$new_order->update_status( 'on-hold', __( 'Aufgesplittet via Order-Management', 'om-order-management' ) );
-			}
+			// New order goes on-hold (also at 0 €, e.g. free items); no customer/admin mails for split orders
+			$this->suppress_order_emails( $new_order->get_id() );
+			$new_order->update_status( 'on-hold', __( 'Aufgesplittet via Order-Management', 'om-order-management' ) );
 
 			$moved_count++;
 		}
@@ -1095,21 +1154,17 @@ class Order_Management {
 		$order->calculate_totals( true );
 		$order->save();
 
-		// if original order now has no items -> mark it cancelled; otherwise if total is 0 -> cancel it
+		// Cancel the original order only when all items were moved into new orders
 		$remaining_items = $order->get_items();
 		if ( empty( $remaining_items ) ) {
 			// statt löschen: auf "cancelled" setzen, damit Audit/History erhalten bleibt
 			if ( 'cancelled' !== $order->get_status() ) {
-				$order->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Weiterverarbeitung', 'om-order-management' ) );
+				$this->suppress_order_emails( $order->get_id() );
+				$order->update_status( 'cancelled', __( 'Automatisch storniert (alle Positionen ausgegliedert) nach Weiterverarbeitung', 'om-order-management' ) );
 			}
 		} else {
-			$orig_total = floatval( $order->get_total() );
-			if ( 0.0 >= $orig_total ) {
-				$order->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Weiterverarbeitung', 'om-order-management' ) );
-			} else {
-				$order->add_order_note( __( 'Positionen ausgegliedert via Order-Management', 'om-order-management' ) );
-				$order->save();
-			}
+			$order->add_order_note( __( 'Positionen ausgegliedert via Order-Management', 'om-order-management' ) );
+			$order->save();
 		}
 
 		return ( $moved_count > 0 );
@@ -1195,88 +1250,45 @@ global $order_management;
 $order_management = new Order_Management();
 
 /**
- * Global queue processor (processes pending entries, updates status to done and reschedules if needed)
+ * Run one batch of a queue (split or complete) under a lock and reschedule if entries remain.
+ * Used by WP-Cron and by the AJAX trigger from assets/om-queue.js.
  */
-if ( ! function_exists( 'om_process_queue_handler' ) ) {
-	function om_process_queue_handler() {
+if ( ! function_exists( 'om_run_queue_batch' ) ) {
+	function om_run_queue_batch( $queue ) {
 		global $wpdb, $order_management;
-		$table = $wpdb->prefix . 'om_order_queue';
+		$is_split = ( 'split' === $queue );
+		$table    = $wpdb->prefix . ( $is_split ? 'om_order_queue' : 'om_order_complete_queue' );
+		$lock     = $is_split ? 'om_split_queue' : 'om_complete_queue';
+		$hook     = $is_split ? 'om_process_queue' : 'om_process_complete_queue';
+
+		// another request is already processing this queue
+		if ( ! $order_management->acquire_lock( $lock ) ) {
+			return;
+		}
 
 		// Fetch a batch of pending entries
 		$limit = 20;
 		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE status = %s ORDER BY id ASC LIMIT %d", 'pending', $limit ) );
-
-		if ( empty( $rows ) ) {
-			return;
-		}
-
-		// group by order_id
-		$grouped = array();
-		foreach ( $rows as $r ) {
-			$oid = intval( $r->order_id );
-			if ( ! isset( $grouped[ $oid ] ) ) {
-				$grouped[ $oid ] = array();
-			}
-			$grouped[ $oid ][] = $r;
-		}
-
-		foreach ( $grouped as $order_id => $entries ) {
-			// collect item ids for this order
-			$item_ids = array();
-			foreach ( $entries as $e ) {
-				if ( ! empty( $e->order_item_id ) ) {
-					$item_ids[] = intval( $e->order_item_id );
-				}
-			}
-
-			// If there are item ids -> perform split operation for this order
-			if ( ! empty( $item_ids ) && isset( $order_management ) ) {
-				$order_management->split_order_items( $order_id, $item_ids );
+		if ( ! empty( $rows ) ) {
+			if ( $is_split ) {
+				$order_management->process_split_queue_rows( $rows, $table );
 			} else {
-				// fallback: if no item ids, just set order status to on-hold
-				$ord = wc_get_order( $order_id );
-				if ( $ord ) {
-					if ( 'on-hold' !== $ord->get_status() ) {
-						$ord->update_status( 'on-hold', __( 'Status via Order-Management (Queue) gesetzt', 'om-order-management' ) );
-					}
-					// If this order has no items, cancel it
-					$items = $ord->get_items();
-					if ( empty( $items ) ) {
-						if ( 'cancelled' !== $ord->get_status() ) {
-							$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abarbeitung', 'om-order-management' ) );
-						}
-					} else {
-						// If total is 0, also cancel
-						$ord_total = floatval( $ord->get_total() );
-						if ( 0.0 >= $ord_total ) {
-							if ( 'cancelled' !== $ord->get_status() ) {
-								$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abarbeitung', 'om-order-management' ) );
-							}
-						}
-					}
-				}
-			}
-
-			// mark processed rows as done
-			$ids = wp_list_pluck( $entries, 'id' );
-			if ( ! empty( $ids ) ) {
-				$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-				$wpdb->query(
-					$wpdb->prepare(
-						"UPDATE {$table} SET status = %s, processed_at = %s WHERE id IN ($placeholders)",
-						array_merge( array( 'done', current_time( 'mysql', 1 ) ), $ids )
-					)
-				);
+				$order_management->process_complete_queue_rows( $rows, $table );
 			}
 		}
+		$order_management->release_lock( $lock );
 
-		// If there are still pending entries, schedule next run shortly
-		$remaining = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) );
-		if ( $remaining && intval( $remaining ) > 0 ) {
-			if ( ! wp_next_scheduled( 'om_process_queue' ) ) {
-				wp_schedule_single_event( time() + 5, 'om_process_queue' );
-			}
+		// If there are still pending entries, schedule next run shortly (WP-Cron fallback)
+		$remaining = intval( $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) ) );
+		if ( $remaining > 0 && ! wp_next_scheduled( $hook ) ) {
+			wp_schedule_single_event( time() + 5, $hook );
 		}
+	}
+}
+
+if ( ! function_exists( 'om_process_queue_handler' ) ) {
+	function om_process_queue_handler() {
+		om_run_queue_batch( 'split' );
 	}
 	add_action( 'om_process_queue', 'om_process_queue_handler' );
 }
@@ -1284,58 +1296,7 @@ if ( ! function_exists( 'om_process_queue_handler' ) ) {
 // --- Complete queue processor ---
 if ( ! function_exists( 'om_process_complete_queue_handler' ) ) {
 	function om_process_complete_queue_handler() {
-		global $wpdb;
-		$table = $wpdb->prefix . 'om_order_complete_queue';
-
-		// Fetch a batch of pending entries
-		$limit = 20;
-		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE status = %s ORDER BY id ASC LIMIT %d", 'pending', $limit ) );
-
-		if ( empty( $rows ) ) {
-			return;
-		}
-
-		foreach ( $rows as $r ) {
-			$ord = wc_get_order( intval( $r->order_id ) );
-			if ( $ord ) {
-				// determine if order has items or total > 0
-				$items = $ord->get_items();
-				$ord_total = floatval( $ord->get_total() );
-
-				if ( empty( $items ) ) {
-					// no items -> cancel to keep history
-					if ( 'cancelled' !== $ord->get_status() ) {
-						$ord->update_status( 'cancelled', __( 'Automatisch storniert (keine Positionen) nach Abschluss-Queue', 'om-order-management' ) );
-					}
-				} elseif ( 0.0 >= $ord_total ) {
-					// zero total -> cancel
-					if ( 'cancelled' !== $ord->get_status() ) {
-						$ord->update_status( 'cancelled', __( 'Automatisch storniert (0 €) nach Abschluss-Queue', 'om-order-management' ) );
-					}
-				} else {
-					// normal case: complete if not already
-					if ( 'completed' !== $ord->get_status() ) {
-						$ord->update_status( 'completed', __( 'Abgeschlossen via Order-Management (Queue)', 'om-order-management' ) );
-					}
-				}
-			}
-
-			$wpdb->update(
-				$table,
-				array( 'status' => 'done', 'processed_at' => current_time( 'mysql', 1 ) ),
-				array( 'id' => intval( $r->id ) ),
-				array( '%s', '%s' ),
-				array( '%d' )
-			);
-		}
-
-		// If there are still pending entries, schedule next run shortly
-		$remaining = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", 'pending' ) );
-		if ( $remaining && intval( $remaining ) > 0 ) {
-			if ( ! wp_next_scheduled( 'om_process_complete_queue' ) ) {
-				wp_schedule_single_event( time() + 5, 'om_process_complete_queue' );
-			}
-		}
+		om_run_queue_batch( 'complete' );
 	}
 	add_action( 'om_process_complete_queue', 'om_process_complete_queue_handler' );
 }

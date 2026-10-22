@@ -294,44 +294,7 @@ function om_page_split_item() {
 						if ( ! $item ) {
 							continue;
 						}
-						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
-						$meta_parts = array();
-						if ( ! empty( $meta_data ) ) {
-							foreach ( $meta_data as $md ) {
-								if ( empty( $md->key ) ) {
-									continue;
-								}
-								$mkey = $md->key;
-								if ( strpos( $mkey, '_' ) === 0 ) {
-									continue;
-								}
-								$mval = $item->get_meta( $mkey );
-								if ( $mval === '' || $mval === null ) {
-									continue;
-								}
-								if ( is_array( $mval ) ) {
-									$mval = implode( ', ', array_map( 'strval', $mval ) );
-								} else {
-									$mval = (string) $mval;
-								}
-								$title = $mkey;
-								if ( false !== strpos( $mkey, '_' ) ) {
-									$parts_k = explode( '_', $mkey, 2 );
-									if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
-										$title = $parts_k[1];
-									}
-								}
-								$title = str_replace( array( '-', '_' ), ' ', $title );
-								$title = trim( $title );
-								$title = ucwords( $title );
-								$meta_parts[] = $title . ': ' . $mval;
-							}
-						}
-						if ( empty( $meta_parts ) ) {
-							$option_rows[] = '';
-						} else {
-							$option_rows[] = implode( '; ', $meta_parts );
-						}
+						$option_rows[] = om_get_item_options_string( $item );
 					}
 				}
 			}

@@ -3,7 +3,7 @@
  * Plugin Name: Woocommerce Order-Management
  * Plugin URI:  https://fischer-it.eu/wp-order-management
  * Description: Admin page that displays WooCommerce "in Bearbeitung" orders grouped by customer in a Bootstrap-styled responsive table.
- * Version:     1.14.0-261019-12
+ * Version:     1.14.1-261022-14
  * Author:      Stephan Fischer
  * Author URI:  https://fischer-it.eu
  * Text Domain: woocommerce-order-management
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Order_Management {
 
-	const VERSION = '1.14.0-261019-12';
+	const VERSION = '1.14.1-261022-14';
 	const PLUGIN_SLUG = 'woocommerce-order-management';
 
 	// Store main menu hook suffix
@@ -1169,6 +1169,56 @@ class Order_Management {
 
 		return ( $moved_count > 0 );
 	}
+}
+
+/**
+ * Build the "Optionen" string for an order item (e.g. PPOM fields like an individual engraving).
+ * Variation attributes (e.g. size) are skipped, because they are already part of the variant label.
+ *
+ * @param WC_Order_Item_Product $item
+ * @return string e.g. "Gravur: Max; Farbe: Rot" or '' when the item has no options
+ */
+function om_get_item_options_string( $item ) {
+	$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
+	if ( empty( $meta_data ) ) {
+		return '';
+	}
+	// meta keys used for variation attributes (e.g. "pa_groesse" or "groesse")
+	$variation_keys = array();
+	$vid = method_exists( $item, 'get_variation_id' ) ? intval( $item->get_variation_id() ) : 0;
+	if ( $vid > 0 ) {
+		$variation = $item->get_product();
+		if ( $variation && method_exists( $variation, 'get_variation_attributes' ) ) {
+			foreach ( array_keys( $variation->get_variation_attributes() ) as $attr_key ) {
+				$variation_keys[] = preg_replace( '/^attribute_/', '', $attr_key );
+			}
+		}
+	}
+	$meta_parts = array();
+	foreach ( $meta_data as $md ) {
+		if ( empty( $md->key ) ) continue;
+		$mkey = $md->key;
+		if ( strpos( $mkey, '_' ) === 0 ) continue;
+		if ( $vid > 0 && ( strpos( $mkey, 'pa_' ) === 0 || in_array( $mkey, $variation_keys, true ) ) ) continue;
+		$mval = $item->get_meta( $mkey );
+		if ( $mval === '' || $mval === null ) continue;
+		if ( is_array( $mval ) ) {
+			$mval = implode( ', ', array_map( 'strval', $mval ) );
+		} else {
+			$mval = (string) $mval;
+		}
+		$title = $mkey;
+		if ( false !== strpos( $mkey, '_' ) ) {
+			$parts_k = explode( '_', $mkey, 2 );
+			if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
+				$title = $parts_k[1];
+			}
+		}
+		$title = str_replace( array( '-', '_' ), ' ', $title );
+		$title = ucwords( trim( $title ) );
+		$meta_parts[] = $title . ': ' . $mval;
+	}
+	return implode( '; ', $meta_parts );
 }
 
 // --- Activation: create queue table ---

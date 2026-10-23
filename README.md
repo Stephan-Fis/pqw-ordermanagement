@@ -64,11 +64,14 @@ Das Plugin liefert eine responsive Admin-Oberfläche (Bootstrap) zum Verwalten v
 
 ## Changelog
 
-- 1.14.1-261022-14
+- 1.14.1-261023-15
   - XLSX-Export (Artikel): gleiche Artikel mit gleicher Option werden zu einer Zeile zusammengefasst und die Mengen addiert
   - Export mit Personen: gleiche Artikel/Option je Person werden zusammengefasst
   - Optionen enthalten keine Variationsattribute (z. B. Größe) mehr, nur noch echte Zusatzoptionen wie Gravuren
   - Gemeinsamer Helper `om_get_item_options_string()` statt vierfach kopiertem Code
+  - Abschließen nach Name: Artikelname ohne doppelte Größe (vorher "Jacke - L — Größe: L")
+  - Abschließen und Aufteilen nach Name: E-Mail-Spalte entfernt
+  - Optionen werden pro Artikel nur einmal angezeigt, leere Zusatzzeilen entfallen
 - 1.14.0-261019-12
   - Offene Jobs: Auswahl wird pro Queue-Tabelle ausgewertet (vorher wurden IDs beider Queues vermischt)
   - Beim Aufteilen werden keine WooCommerce-Mails mehr verschickt (wartend, neue Bestellung, storniert)

@@ -83,10 +83,10 @@ function om_page_complete_name() {
 					if ( $vid > 0 ) {
 						// Varianten über alle Bestellungen zusammenfassen
 						$key = 'vid_' . $vid;
-						// Produktname ohne Variantenlabel (keine Anzeige der Varianten-Name/ID)
-						$name_field = isset( $r['product_name'] ) ? $r['product_name'] : '';
-
 						if ( ! isset( $agg[ $key ] ) ) {
+							// Name des Hauptprodukts verwenden: der Positionsname der Variante enthält die Größe bereits ("Jacke - L")
+							$parent_obj = $pid > 0 ? wc_get_product( $pid ) : null;
+							$name_field = $parent_obj && method_exists( $parent_obj, 'get_name' ) ? (string) $parent_obj->get_name() : ( isset( $r['product_name'] ) ? $r['product_name'] : '' );
 							$agg[ $key ] = array(
 								'product_id'    => $vid,
 								'product_name'  => $name_field,
@@ -304,7 +304,6 @@ function om_page_complete_name() {
 	echo '<thead class="table-dark"><tr>';
 	echo '<th scope="col"><input type="checkbox" id="om_select_all" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Name</th>';
-	echo '<th scope="col">E-Mail</th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Menge</th>';
 	echo '<th scope="col">Preis</th>';
@@ -364,6 +363,8 @@ function om_page_complete_name() {
 					}
 				}
 			}
+			// show each distinct option only once (items without options need no extra row)
+			$option_rows = array_values( array_unique( array_filter( $option_rows, 'strlen' ) ) );
 			if ( empty( $option_rows ) ) {
 				$option_rows[] = '';
 			}
@@ -395,8 +396,6 @@ function om_page_complete_name() {
 				if ( $first_customer_row ) {
 					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '"><input type="checkbox" name="customers[]" value="' . esc_attr( $cust_key ) . '" class="om-customer-checkbox" /></td>';
 					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '">' . esc_html( $display_name ) . '</td>';
-					$email_val = isset( $cust_data['email'] ) ? $cust_data['email'] : '';
-					echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="E-Mail">' . esc_html( $email_val ) . '</td>';
 					$first_customer_row = false;
 				}
 

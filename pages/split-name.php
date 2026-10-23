@@ -181,7 +181,6 @@ function om_page_split_name() {
 	echo '<thead class="table-dark"><tr>';
 	echo '<th scope="col"><input type="checkbox" id="om_select_all" aria-label="Alle auswählen" /></th>';
 	echo '<th scope="col">Person</th>';
-	echo '<th scope="col">E-Mail</th>';
 	echo '<th scope="col">Artikel</th>';
 	echo '<th scope="col">Kurzbeschreibung</th>';
 	echo '<th scope="col">Beschreibung</th>';
@@ -235,48 +234,12 @@ function om_page_split_name() {
 						if ( ! $item ) {
 							continue;
 						}
-						$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
-						$meta_parts = array();
-						if ( ! empty( $meta_data ) ) {
-							foreach ( $meta_data as $md ) {
-								if ( empty( $md->key ) ) {
-									continue;
-								}
-								$mkey = $md->key;
-								if ( strpos( $mkey, '_' ) === 0 ) {
-									continue;
-								}
-								$mval = $item->get_meta( $mkey );
-								if ( $mval === '' || $mval === null ) {
-									continue;
-								}
-								if ( is_array( $mval ) ) {
-									$mval = implode( ', ', array_map( 'strval', $mval ) );
-								} else {
-									$mval = (string) $mval;
-								}
-								// title from key
-								$title = $mkey;
-								if ( false !== strpos( $mkey, '_' ) ) {
-									$parts_k = explode( '_', $mkey, 2 );
-									if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
-										$title = $parts_k[1];
-									}
-								}
-								$title = str_replace( array( '-', '_' ), ' ', $title );
-								$title = ucwords( trim( $title ) );
-								$meta_parts[] = $title . ': ' . $mval;
-							}
-						}
-						if ( empty( $meta_parts ) ) {
-							$option_rows[] = '';
-						} else {
-							$option_rows[] = implode( '; ', $meta_parts );
-						}
+						$option_rows[] = om_get_item_options_string( $item );
 					}
 				}
 			}
-			// ensure at least one row per aggregated item (empty options show as single blank row)
+			// show each distinct option only once; ensure at least one row per aggregated item (empty options show as single blank row)
+			$option_rows = array_values( array_unique( array_filter( $option_rows, 'strlen' ) ) );
 			if ( empty( $option_rows ) ) {
 				$option_rows[] = '';
 			}
@@ -316,10 +279,7 @@ function om_page_split_name() {
 
 			if ( $first_customer_row ) {
 				$person_html = '<div class="om-customer-name">' . esc_html( $display_name ) . '</div>';
-				$email_val = isset( $c['email'] ) ? $c['email'] : '';
-				$email_html = '<div class="om-customer-email">' . esc_html( $email_val ) . '</div>';
 				echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="Person">' . $person_html . '</td>';
-				echo '<td rowspan="' . esc_attr( $total_rows_for_customer ) . '" data-label="E-Mail">' . $email_html . '</td>';
 				$first_customer_row = false;
 			}
 

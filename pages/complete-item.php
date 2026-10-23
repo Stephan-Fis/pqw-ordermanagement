@@ -128,33 +128,7 @@ function om_page_complete_item() {
 				}
 				$aggregated[ $key ]['quantity'] += intval( $item->get_quantity() );
 				// collect option/meta string for this order item for aggregated product-level options
-				$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
-				$meta_parts = array();
-				if ( ! empty( $meta_data ) ) {
-					foreach ( $meta_data as $md ) {
-						if ( empty( $md->key ) ) continue;
-						$mkey = $md->key;
-						if ( strpos( $mkey, '_' ) === 0 ) continue;
-						$mval = $item->get_meta( $mkey );
-						if ( $mval === '' || $mval === null ) continue;
-						if ( is_array( $mval ) ) {
-							$mval = implode( ', ', array_map( 'strval', $mval ) );
-						} else {
-							$mval = (string) $mval;
-						}
-						$title = $mkey;
-						if ( false !== strpos( $mkey, '_' ) ) {
-							$parts_k = explode( '_', $mkey, 2 );
-							if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
-								$title = $parts_k[1];
-							}
-						}
-						$title = str_replace( array( '-', '_' ), ' ', $title );
-						$title = ucwords( trim( $title ) );
-						$meta_parts[] = $title . ': ' . $mval;
-					}
-				}
-				$optstr = empty( $meta_parts ) ? '' : implode( '; ', $meta_parts );
+				$optstr = om_get_item_options_string( $item );
 				if ( ! isset( $product_options[ $key ] ) ) $product_options[ $key ] = array();
 				if ( $optstr !== '' ) $product_options[ $key ][] = $optstr;
 			}
@@ -233,33 +207,7 @@ function om_page_complete_item() {
 				$product_customers[ $key ][ $customer_key ]['total']    += floatval( $item->get_total() );
 
 				// build option string for this specific order item
-				$meta_data = method_exists( $item, 'get_meta_data' ) ? $item->get_meta_data() : array();
-				$meta_parts = array();
-				if ( ! empty( $meta_data ) ) {
-					foreach ( $meta_data as $md ) {
-						if ( empty( $md->key ) ) continue;
-						$mkey = $md->key;
-						if ( strpos( $mkey, '_' ) === 0 ) continue;
-						$mval = $item->get_meta( $mkey );
-						if ( $mval === '' || $mval === null ) continue;
-						if ( is_array( $mval ) ) {
-							$mval = implode( ', ', array_map( 'strval', $mval ) );
-						} else {
-							$mval = (string) $mval;
-						}
-						$title = $mkey;
-						if ( false !== strpos( $mkey, '_' ) ) {
-							$parts_k = explode( '_', $mkey, 2 );
-							if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
-								$title = $parts_k[1];
-							}
-						}
-						$title = str_replace( array( '-', '_' ), ' ', $title );
-						$title = ucwords( trim( $title ) );
-						$meta_parts[] = $title . ': ' . $mval;
-					}
-				}
-				$optstr = empty( $meta_parts ) ? '' : implode( '; ', $meta_parts );
+				$optstr = om_get_item_options_string( $item );
 				// push per-item entry so client export can create one row per original item (with options)
 				$product_customers[ $key ][ $customer_key ]['per_items'][] = array(
 					'qty'   => intval( $item->get_quantity() ),
@@ -324,9 +272,10 @@ function om_page_complete_item() {
 					var title = (p.product_name || '');
 					if (p.variant_label) title = title + ' — ' + p.variant_label;
 
-					// If we have per-customer/order-item details, output one row per ordered item including its options
+					// one row per article and option (e.g. engraving); items with identical options are summed up
 					var map = om_export_product_orders[key];
 					if (map) {
+						var byOption = {};
 						for (var cust in map) {
 							if (!map.hasOwnProperty(cust)) continue;
 							var entry = map[cust];
@@ -334,15 +283,19 @@ function om_page_complete_item() {
 							if (perItems && perItems.length) {
 								for (var pi = 0; pi < perItems.length; pi++) {
 									var it = perItems[pi];
-									rows.push({
-										'Artikel': title,
-										'Beschreibung': (p.full_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
-										'Kurzbeschreibung': (p.short_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
-										'Optionen': it.option || '',
-										'Gesamtmenge': parseInt(it.qty || 0, 10)
-									});
+									var opt = it.option || '';
+									if (!byOption.hasOwnProperty(opt)) {
+										byOption[opt] = {
+											'Artikel': title,
+											'Beschreibung': (p.full_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
+											'Kurzbeschreibung': (p.short_desc || '').replace(/(\r\n|\n|\r)/gm, " "),
+											'Optionen': opt,
+											'Gesamtmenge': 0
+										};
+										rows.push(byOption[opt]);
+									}
+									byOption[opt]['Gesamtmenge'] += parseInt(it.qty || 0, 10) || 0;
 								}
-								continue;
 							}
 						}
 					}
@@ -412,13 +365,25 @@ function om_page_complete_item() {
 								var ptotal = parseFloat(it.total || 0) || 0;
 								var punit = pqty ? (ptotal / pqty) : ptotal;
 								var popt = it.option || '';
-								persons[custKey].rows.push({
-									product_name: title,
-									qty: pqty,
-									unitPrice: punit,
-									total: ptotal,
-									options: popt
-								});
+								// same article with same option for the same person -> sum up into one row
+								var prow = null;
+								for (var ri = 0; ri < persons[custKey].rows.length; ri++) {
+									var cand = persons[custKey].rows[ri];
+									if (cand.product_name === title && cand.options === popt) { prow = cand; break; }
+								}
+								if (prow) {
+									prow.qty += pqty;
+									prow.total += ptotal;
+									prow.unitPrice = prow.qty ? (prow.total / prow.qty) : prow.total;
+								} else {
+									persons[custKey].rows.push({
+										product_name: title,
+										qty: pqty,
+										unitPrice: punit,
+										total: ptotal,
+										options: popt
+									});
+								}
 								persons[custKey].total += ptotal;
 							}
 						} else {
@@ -590,40 +555,12 @@ function om_page_complete_item() {
 					$vid_i = method_exists( $item_obj, 'get_variation_id' ) ? intval( $item_obj->get_variation_id() ) : 0;
 					$k_i = $vid_i > 0 ? 'v' . $vid_i : 'p' . $pid_i;
 					if ( $k_i !== $key ) continue;
-					$meta_data = method_exists( $item_obj, 'get_meta_data' ) ? $item_obj->get_meta_data() : array();
-					$meta_parts = array();
-					if ( ! empty( $meta_data ) ) {
-						foreach ( $meta_data as $md ) {
-							if ( empty( $md->key ) ) continue;
-							$mkey = $md->key;
-							if ( strpos( $mkey, '_' ) === 0 ) continue;
-							$mval = $item_obj->get_meta( $mkey );
-							if ( $mval === '' || $mval === null ) continue;
-							if ( is_array( $mval ) ) {
-								$mval = implode( ', ', array_map( 'strval', $mval ) );
-							} else {
-								$mval = (string) $mval;
-							}
-							$title = $mkey;
-							if ( false !== strpos( $mkey, '_' ) ) {
-								$parts_k = explode( '_', $mkey, 2 );
-								if ( isset( $parts_k[1] ) && $parts_k[1] !== '' ) {
-									$title = $parts_k[1];
-								}
-							}
-							$title = str_replace( array( '-', '_' ), ' ', $title );
-							$title = ucwords( trim( $title ) );
-							$meta_parts[] = $title . ': ' . $mval;
-						}
-					}
-					if ( empty( $meta_parts ) ) {
-						$option_rows[] = '';
-					} else {
-						$option_rows[] = implode( '; ', $meta_parts );
-					}
+					$option_rows[] = om_get_item_options_string( $item_obj );
 				}
 			}
 		}
+		// show each distinct option only once (items without options need no extra row)
+		$option_rows = array_values( array_unique( array_filter( $option_rows, 'strlen' ) ) );
 		if ( empty( $option_rows ) ) $option_rows[] = '';
 
 		$rowspan = max( 1, count( $option_rows ) );
